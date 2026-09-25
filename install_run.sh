@@ -24,8 +24,10 @@ PY="$CONDA_HOME/envs/$ENV_NAME/bin/python"
 echo "[env] conda=$CONDA_HOME, env=$ENV_NAME"
 
 # 官方文档是 conda create --name=pykt python=3.7.5，但本机是 osx-arm64，conda 上 python 最低只有 3.8，故用 3.9
+# 用 conda-forge 而不是默认频道：defaults 需要先 conda tos accept 接受 Anaconda 服务条款，
+# 没接受过的机器（比如 ecnu 那台）会直接 CondaToSNonInteractiveError
 if [ ! -x "$PY" ]; then
-    "$CONDA_HOME/bin/conda" create -y --name=$ENV_NAME python=3.9
+    "$CONDA_HOME/bin/conda" create -y --name=$ENV_NAME -c conda-forge --override-channels python=3.9
 fi
 
 # source activate pykt  —— 脚本里直接用环境内的解释器，避免依赖 conda 的 shell 钩子
