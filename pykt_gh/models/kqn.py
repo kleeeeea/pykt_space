@@ -51,8 +51,11 @@ class KQN(nn.Module):
         self.drop_layer = nn.Dropout(dropout)
         self.sigmoid = nn.Sigmoid()
         # self.loss_fn = nn.BCEWithLogitsLoss(reduction='mean')
-        self.two_eye = torch.eye(2*n_skills)
-        self.eye = torch.eye(n_skills)
+        # [本地改动] 原文是 torch.eye(...)：普通张量不是 buffer，model.to(device) 带不走，一直留在 CPU，
+        # 而 forward 里拿 GPU 上的索引来查它会报 "indices should be either on cpu or on the same device"。
+        # 建好就放到 device 上（不注册成 buffer，避免改变 state_dict 的键让已有 checkpoint 加载失败）
+        self.two_eye = torch.eye(2*n_skills).to(device)
+        self.eye = torch.eye(n_skills).to(device)
 
     
     def init_hidden(self, batch_size: int):

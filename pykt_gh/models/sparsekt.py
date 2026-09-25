@@ -735,9 +735,10 @@ class CosinePositionalEmbedding(nn.Module):
 class timeGap(nn.Module):
     def __init__(self, num_rgap, num_sgap, num_pcount, emb_size) -> None:
         super().__init__()
-        self.rgap_eye = torch.eye(num_rgap)
-        self.sgap_eye = torch.eye(num_sgap)
-        self.pcount_eye = torch.eye(num_pcount)
+        # [本地改动] 同 dkt_forget/kqn：普通张量留在 CPU，GPU 上用它做索引会崩，建好就放到 device
+        self.rgap_eye = torch.eye(num_rgap).to(device)
+        self.sgap_eye = torch.eye(num_sgap).to(device)
+        self.pcount_eye = torch.eye(num_pcount).to(device)
 
         input_size = num_rgap + num_sgap + num_pcount
 
