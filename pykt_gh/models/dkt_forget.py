@@ -43,9 +43,14 @@ class DKTForget(Module):
 class CIntegration(Module):
     def __init__(self, num_rgap, num_sgap, num_pcount, emb_dim) -> None:
         super().__init__()
-        self.rgap_eye = torch.eye(num_rgap)
-        self.sgap_eye = torch.eye(num_sgap)
-        self.pcount_eye = torch.eye(num_pcount)
+        # [本地改动] 原文是 torch.eye(...)，这三个是普通张量不是 buffer，model.to(device) 带不走，
+        # 一直留在 CPU；而 forward 里的索引 rgap/sgap/pcount 已经在 GPU 上，
+        # 拿 GPU 索引查 CPU 张量会报 "indices should be either on cpu or on the same device"。
+        # CPU 机器上两边都在 CPU 所以看不出来。这里建好就放到 device 上（不注册成 buffer，避免改变
+        # state_dict 的键、让已有 checkpoint 加载失败）
+        self.rgap_eye = torch.eye(num_rgap).to(device)
+        self.sgap_eye = torch.eye(num_sgap).to(device)
+        self.pcount_eye = torch.eye(num_pcount).to(device)
 
         ntotal = num_rgap + num_sgap + num_pcount
         self.cemb = Linear(ntotal, emb_dim, bias=False)
