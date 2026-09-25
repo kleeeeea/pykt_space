@@ -1,0 +1,215 @@
+                             Context-Aware Attentive Knowledge Tracing
+                     Aritra Ghosh                                                Neil Heffernan                                     Andrew S. Lan
+    University of Massachusetts Amherst                                Worcester Polytechnic Institute               University of Massachusetts Amherst
+                Amherst, MA                                                   Worcester, MA                                      Amherst, MA
+          arighosh@cs.umass.edu                                                nth@wpi.edu                                andrewlan@cs.umass.edu
+
+ABSTRACT                                                                                         A key problem in learner data analysis is to predict future learner
+Knowledge tracing (KT) refers to the problem of predicting future                             performance (their responses to assessment questions), given their
+learner performance given their past performance in educational                               past performance, which is referred to as the knowledge tracing
+applications. Recent developments in KT using flexible deep neural                            (KT) problem [3]. Over the last 30 years, numerous methods for
+network-based models excel at this task. However, these models of-                            solving the KT problem were developed based on two common
+ten offer limited interpretability, thus making them insufficient for                         assumptions: i) a learner’s past performance can be summarized
+personalized learning, which requires using interpretable feedback                            by a set of variables representing their current latent knowledge
+and actionable recommendations to help learners achieve better                                level on a set of concepts/skills/knowledge components, and ii) a
+learning outcomes. In this paper, we propose attentive knowledge                              learner’s future performance can be predicted using their current
+tracing (AKT), which couples flexible attention-based neural net-                             latent concept knowledge levels. Concretely, let t denote a set of
+work models with a series of novel, interpretable model compo-                                discrete time indices, we have the following generic model for a
+nents inspired by cognitive and psychometric models. AKT uses                                 learner’s knowledge and performance
+a novel monotonic attention mechanism that relates a learner’s
+future responses to assessment questions to their past responses;                                                  r t ∼ f (ht ),   ht ∼ д(ht −1 ),
+attention weights are computed using exponential decay and a
+context-aware relative distance measure, in addition to the sim-                              where r t ∈ {0, 1} denotes the learner’s graded response to an as-
+ilarity between questions. Moreover, we use the Rasch model to                                sessment question at time step t, which is usually binary-valued
+regularize the concept and question embeddings; these embeddings                              (1 corresponds to a correct response and 0 corresponds to an in-
+are able to capture individual differences among questions on the                             correct one) and is observed. The latent variable ht denotes the
+same concept without using an excessive number of parameters.                                 learner’s current knowledge level and is not observed. f (·) and д(·)
+We conduct experiments on several real-world benchmark datasets                               are functions that characterize how learner knowledge dictate their
+and show that AKT outperforms existing KT methods (by up to 6%                                responses and how it evolves; they are sometimes referred to as the
+in AUC in some cases) on predicting future learner responses. We                              response model and the knowledge evolution model, respectively.
+also conduct several case studies and show that AKT exhibits excel-                              Earlier developments in KT methods before 2010 can be divided
+lent interpretability and thus has potential for automated feedback                           into two classes. The first class centered around the Bayesian knowl-
+and personalization in real-world educational settings.                                       edge tracing (BKT) method [19, 35] where knowledge (ht ) is a
+ACM Reference Format:                                                                         binary-valued scalar that characterizes whether or not a learner
+Aritra Ghosh, Neil Heffernan, and Andrew S. Lan. 2020. Context-Aware                          masters the (single) concept covered by a question. Since the re-
+Attentive Knowledge Tracing. In Proceedings of the 26th ACM SIGKDD                            sponse (r t ) is also binary-valued, the response and knowledge evo-
+Conference on Knowledge Discovery and Data Mining USB Stick (KDD ’20),                        lution models are simply noisy binary channels, parameterized by
+August 23–27, 2020, Virtual Event, USA. ACM, New York, NY, USA, 10 pages.                     the guessing, slipping, learning, and forgetting probabilities. The
+https://doi.org/10.1145/3394486.3403282                                                       second class centered around item response theory (IRT) models
+                                                                                              [16] and use these models (especially sigmoidal link functions) as
+1     INTRODUCTION                                                                            the response model f (·); learner knowledge level is then modeled as
+Recent advances in data analytics and intelligent tutoring systems                            real-valued vectors (ht ) for questions that cover multiple concepts.
+[32] have enabled the collection and analysis of large-scale learner                          Among these methods, the SPARFA-Trace method [13] used a sim-
+data; these advances hint at the potential of personalized learning                           ple affine transformation model as the explicit knowledge evolution
+at large scale, by automatically providing personalized feedback                              model д(·). Other methods, e.g., additive factor models [1], perfor-
+[24] and learning activity recommendations [11] to each learner by                            mance factor analysis [22], the difficulty, ability, and student history
+analyzing data from their learning history.                                                   (DASH) model [15], and a few recent methods including knowledge
+                                                                                              factorization machines [30] and an extension to the DASH model,
+Permission to make digital or hard copies of all or part of this work for personal or
+classroom use is granted without fee provided that copies are not made or distributed         the DAS3H model [2], used hand-crafted features such as the num-
+for profit or commercial advantage and that copies bear this notice and the full citation     ber of previous attempts, successes, and failures on each concept
+on the first page. Copyrights for components of this work owned by others than ACM            in their knowledge evolution model. Methods in both classes rely
+must be honored. Abstracting with credit is permitted. To copy otherwise, or republish,
+to post on servers or to redistribute to lists, requires prior specific permission and/or a   on expert labels to associate questions to concepts, resulting in
+fee. Request permissions from permissions@acm.org.                                            excellent interpretability since they can effectively estimate the
+KDD ’20, August 23–27, 2020, Virtual Event, USA                                               knowledge level of each learner on expert-defined concepts.
+© 2020 Association for Computing Machinery.
+ACM ISBN 978-1-4503-7998-4/20/08. . . $15.00                                                     Recent developments in KT centered around using more sophisti-
+https://doi.org/10.1145/3394486.3403282                                                       cated and flexible models to fully exploit the information contained
+in large-scale learner response datasets. The deep knowledge trac-        (2) Inspired by cognitive science findings on the mechanisms of for-
+ing (DKT) method [23] was the first method to explore the use                 getting, we propose a novel monotonic attention mechanism that
+of (possibly deep) neural networks for KT by using long short-                uses an exponential decay curve to down weight the importance
+term memory (LSTM) networks [7] as the knowledge evolution                    of questions in the distant past. We also develop a context-aware
+model д(·). Since LSTM units are nonlinear, complex functions, they           measure to characterize the time distance between questions a
+are more flexible than affine transformations and more capable of             learner has responded to in the past.
+capturing nuances in real data.                                           (3) Leveraging the Rasch model, a simple and interpretable IRT
+   The dynamic key-value memory networks (DKVMN) method                       model, we use a series of Rasch model-based embeddings to
+extended DKT by using an external memory matrix (Ht ) to char-                capture individual differences among questions without intro-
+acterize learner knowledge [36]. The matrix is separated into two             ducing an excessive amount of model parameters.
+parts: a static, “key” matrix that contains the fixed representation of   We conduct a series of experiments on several benchmark real-
+each concept, and a dynamic, “value” matrix that contains the evolv-      world educational datasets comparing AKT to state-of-the-art KT
+ing knowledge levels of each learner on each concept. DKVMN               methods. Our results show that AKT (sometimes significantly) out-
+also uses separate “read” and “write” processes on this external          performs other KT methods in predicting future learner perfor-
+matrix for the response and knowledge evolution models; these             mance. Further, we perform ablation studies on each of the key AKT
+processes make it even more flexible than DKT. DKT and KVMN               model components to demonstrate their value. We also perform sev-
+reported state-of-the-art performance in predicting future learner        eral case studies to show that AKT exhibits excellent interpretability
+performance [9] and have been the benchmark for new KT methods.           and has the potential for automated feedback and practice question
+   The self-attentive knowledge tracing (SAKT) method [18] is             recommendation, both key requirements of personalized learning1 .
+the first method to use attention mechanisms in the context of
+KT. Attention mechanisms are more flexible than recurrent and             2     KNOWLEDGE TRACING PROBLEM SETUP
+memory-based neural networks and have demonstrated superior
+                                                                          Each learner’s performance record consists of a sequence of ques-
+performance in natural language processing tasks. The basic setup
+                                                                          tions and responses at each discrete time step. For learner i at time
+of SAKT has many similarities to the Transformer model [29], an
+                                                                          step t, we denote the combination of the question that they an-
+effective model for many sequence-to-sequence prediction tasks.
+                                                                          swered, the concept this question covers, and their graded response
+However, we observe that SAKT does not outperform DKT and
+                                                                          as a tuple, (qti , c ti , r ti ), where qti ∈ N+ is the question index, c ti ∈ N+
+DKVMN in our experiments; see Section 4 for details. Possible
+reasons for this include i) unlike in language tasks where strong         is the concept index, and r ti ∈ {0, 1} is the response. Under this
+long-distance dependencies between words are more common, the             notation, (qti , c ti , 1) means learner i responded to question qti on
+dependence of future learner performance on the past is likely            concept c ti correctly at time t. We note that this setup is different
+restricted to a much shorter window, and ii) the sizes of learner         from some prior works on deep knowledge tracing that often ig-
+response datasets are several magnitudes lower than natural lan-          nore the question index and summarize learner performance as
+guage datasets and are less likely to benefit from highly flexible        (c ti , r ti ). This choice was made to avoid overparameterization; see
+and large-scale attention models.                                         Section 3.3 for a detailed analysis. In the following discussions, we
+   More importantly, no existing KT method truly excels at both fu-       omit the superscript i as we discuss how to predict future perfor-
+ture performance prediction and interpretability. Early KT methods        mance for a single learner. Given their past history up to time t − 1
+exhibit excellent interpretability but do not provide state-of-the-art    as {(q 1, c 1, r 1 ), . . . , (qt −1, c t −1, r t −1 )}, our goal is to predict their
+performance on future learner performance prediction. Recent KT           response r t to question qt on concept c t at the current time step, t.
+methods based on deep learning excel at that but offer limited in-
+terpretability. Therefore, these KT methods do not fully meet the         2.1     Question and Response Embeddings
+needs of personalized learning, which requires not only accurate          Following previous work [36], we use real-valued embedding vec-
+performance prediction but also the ability to provide automated,         tors xt ∈ RD and yt ∈ RD to represent each question and each
+interpretable feedback and actionable recommendations to help             question-response pair (qt , r t ), respectively. xt characterizes in-
+learners achieve better learning outcomes.                                formation about questions, and yt characterizes the knowledge
+                                                                          learners acquire by responding to questions, with two separate
+1.1    Contributions                                                      embeddings for correct and incorrect responses, respectively. D
+                                                                          denotes the dimension of these embeddings. Therefore, let Q denote
+For the task of predicting the learner’s response to the current ques-
+                                                                          the number of questions, there are a total of Q question embed-
+tion, we propose the attentive knowledge tracing (AKT) method,
+                                                                          ding vectors and 2Q question-response embedding vectors. In most
+which uses a series of attention networks to draw connections be-
+                                                                          real-world educational settings, the question bank is considerably
+tween this question and every question the learner has responded
+                                                                          larger than the set of concepts and many questions are assigned to
+to in the past. We summarize our key innovations below:
+                                                                          very few learners. Therefore, the majority of existing KT methods
+(1) Contrary to existing attention methods that use raw question          use concepts to index questions to avoid overparameterization; all
+    and response embeddings, we put raw embeddings into con-              questions covering the same concept are treated as a single question.
+    text and use context-aware representations of past questions          In this case, qt = c t and Q = C.
+    and responses by taking a learner’s entire practice history into
+    account.                                                              1 Source code and datasets will be available at https://github.com/arghosh/AKT
+3     THE AKT METHOD                                                      existing methods, including DKT. We also note that the knowl-
+The AKT method consists of four components: two self-attentive            edge retriever can only use information on the past questions, the
+encoders, one for questions and one for knowledge acquisition,            learner’s responses to them, and the representation of the current
+a single attention-based knowledge retriever, and a feed-forward          question, but not the learner’s response to the current question, i.e.,
+response prediction model; Figure 1 visualizes the AKT method             ht = f kr (x̂1, . . . , x̂t , ŷ1, . . . , ŷt −1 ). The response prediction model
+and its connected components.                                             uses the retrieved knowledge to predict the current response.
+   We use the two self-attentive encoders to learn context-aware
+representations of the questions and responses. We refer to the first     3.2     The Monotonic Attention Mechanism
+encoder as the question encoder, which produces modified, contex-         We use a modified, monotonic version of the scaled dot-product
+tualized representations of each question, given the sequence of          attention mechanism for the encoders and the knowledge retriever.
+questions the learner has previously practiced on. Similarly, we          We start by briefly summarizing the original scaled dot-product
+refer to the second encoder as the knowledge encoder, which pro-          attention mechanism. Under this framework, each encoder and the
+duces modified, contextualized representations of the knowledge           knowledge retriever has a key, query, and value embedding layer
+the learner acquired while responding to past questions. Alterna-         that maps the input into output queries, keys, and values of dimen-
+tively, we could use raw embeddings of questions and responses            sion Dq = D k , D k , and Dv , respectively. Let qt ∈ RD k ×1 denote
+similar to prior work. We found that the context-aware representa-        the query corresponding to the question the learner responds to at
+tion performs better in most datasets. We refer to the knowledge          time t, the scaled dot-product attention values α t ;τ are computed
+evolution model as the knowledge retriever, which retrieves knowl-        using the softmax function [5] as
+edge acquired in the past that is relevant to the current question
+using an attention mechanism. Finally, the response prediction
+                                                                                                                                q| k
+model predicts the learner’s response to the current question using                                   |
+                                                                                                     qt kτ   exp( √t τ )
+                                                                                                                    Dk
+the retrieved knowledge. The AKT method is motivated by three                      α t ;τ = Softmax( p ) = ˝                 ∈ [0, 1].
+                                                                                                       Dk            q|
+                                                                                                                      t kτ
+intuitions rooted in cognitive science and psychometrics; we will                                             ′ exp( √  τ  )
+                                                                                                                                          Dk
+detail these intuitions in what follows.
+                                                                          The output of the scaled dot-product attention mechanism is then
+                                                                          given by τ α t ;τ vτ ∈ RDv ×1 . kτ ∈ RD k ×1 and vτ ∈ RDv ×1 denote
+                                                                                    ˝
+3.1    Context-aware Representations and The                              the key and value for the question at time step τ , respectively.
+       Knowledge Retriever                                                Depending on the specific component, the output depends either on
+                                                                          both the past and the current (τ ≤ t for the question and knowledge
+As introduced above, we use two encoders in our model. The ques-
+                                                                          encoders) or only the past (τ < t for the knowledge retriever).
+tion encoder takes raw question embeddings {x1, . . . , xt } as in-
+                                                                              Both encoders employ the self-attention mechanism, i.e., qt , kt ,
+put and outputs a sequence of context-aware question embed-
+                                                                          and vt are computed using the same input; the question encoder
+dings {x̂1, . . ., x̂t } using a monotonic attention mechanism (de-
+                                                                          uses {x1, . . . , xt } while the knowledge encoder uses {y1, . . . , yt −1 }.
+tailed in the next subsection). The context-aware embedding of
+                                                                          The knowledge retriever, on the other hand, does not use self-
+each question depends on both itself and the past questions, i.e.,
+                                                                          attention. As shown in Fig. 1, at time step t, it uses x̂t (the modified
+x̂t = f enc1 (x1, . . . , xt ). Similarly, the knowledge encoder takes
+                                                                          embedding of the current question), {x̂1, . . . , x̂t −1 } (the context-
+raw question-response embeddings {y1, . . . , yt −1 } as input and
+                                                                          aware embeddings of past questions), and {ŷ1, . . . , ŷt −1 } (the
+outputs a sequence of actual knowledge acquired {ŷ1, . . . , ŷt −1 }
+                                                                          context-aware embeddings of past question-response pairs) as in-
+using the same monotonic attention mechanism. The context-aware
+                                                                          put to generate the query, keys, and values, respectively. We note
+embedding of acquired knowledge depend on the learner’s re-
+                                                                          that SAKT uses question embeddings for mapping queries whereas
+sponse to both the current question and past questions, i.e., ŷt −1 =
+                                                                          response embeddings for key and value mapping. In our experi-
+f enc2 (y1, . . . , yt −1 ).
+                                                                          ments, we have found that using question embeddings for mapping
+    The choice of using context-aware embeddings rather than raw
+                                                                          both queries and keys is much more effective.
+embeddings reflects our first intuition: the way a learner compre-
+                                                                              However, this basic scaled dot-product attention mechanism is
+hends and learns while responding to a question depends on the learner.
+                                                                          not likely going to be sufficient for KT. The reason is that learning
+These modified representations reflect each learner’s actual compre-
+                                                                          is temporal and memories decay [21]; a learner’s performance in
+hension of the question and the knowledge they actually acquire,
+                                                                          the distant past is not as informative as recent performance when
+given their personal response history. This model choice is mo-
+                                                                          we are predicting their response to the current question. Therefore,
+tivated by the intuition that for two learners with different past
+                                                                          we develop a new monotonic attention mechanism that reflects our
+response sequences, the way they understand the same question
+                                                                          second intuition: when a learner faces a new question, past experi-
+and the knowledge they acquire from practicing on it can differ.
+                                                                          ences i) on unrelated concepts and ii) that are from too long ago are
+    The knowledge retriever takes the context-aware question and
+                                                                          not likely to be highly relevant. Specifically, we add a multiplicative
+question-response pair embeddings x̂1:t and ŷ1:t −1 as input and
+                                                                          exponential decay term to the attention scores as:
+outputs a retrieved knowledge state ht for the current question.
+We note that in AKT, the learner’s current knowledge state is also
+context-aware since it depends on the current question they are                                                  exp (st ;τ )
+                                                                                                    α t ;τ = ˝                        ,
+responding to; this model choice is different from that in most                                                 τ ′ exp (s t ;τ ′ )
+

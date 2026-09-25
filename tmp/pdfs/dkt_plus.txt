@@ -1,0 +1,919 @@
+                                            Addressing Two Problems in Deep Knowledge Tracing via
+                                                     Prediction-Consistent Regularization
+                                                          Chun-Kit Yeung                                                    Dit-Yan Yeung
+                                                  Hong Kong University of Science and                              Hong Kong University of Science and
+                                                             Technology                                                       Technology
+                                                        ckyeungac@cse.ust.hk                                              dyyeung@cse.ust.hk
+
+
+                                        ABSTRACT                                                            produce massive datasets of student learning trajectories about
+                                        Knowledge tracing is one of the key research areas for empow-       the knowledge components (KCs), where KC is a generic term
+                                        ering personalized education. It is a task to model students’       for skill, concept, exercise, etc. The availability of online
+
+
+
+
+arXiv:1806.02180v1 [cs.AI] 6 Jun 2018
+                                        mastery level of a knowledge component (KC) based on their          activity logs of students has accelerated the development of
+                                        historical learning trajectories. In recent years, a recurrent      learning analytics and educational data mining tools for pre-
+                                        neural network model called deep knowledge tracing (DKT)            dicting the performance and advising the learning of students.
+                                        has been proposed to handle the knowledge tracing task and lit-     Among many topics, knowledge tracing (KT) is considered to
+                                        erature has shown that DKT generally outperforms traditional        be important for enhancing personalized learning. KT is the
+                                        methods. However, through our extensive experimentation,            task of modeling student’s knowledge state, which represents
+                                        we have noticed two major problems in the DKT model. The            the mastery level of KCs, based on historical data. With the es-
+                                        first problem is that the model fails to reconstruct the observed   timated students’ knowledge state, teachers or tutors can gain
+                                        input. As a result, even when a student performs well on a KC,      a better understanding of the attainment levels of their students
+                                        the prediction of that KC’s mastery level decreases instead,        and can tailor the learning materials accordingly. Moreover,
+                                        and vice versa. Second, the predicted performance for KCs           students may also take advantage of the learning analytics
+                                        across time-steps is not consistent. This is undesirable and        tools to come up with better learning plans to deal with their
+                                        unreasonable because student’s performance is expected to           weaknesses and maximize their learning efficacy.
+                                        transit gradually over time. To address these problems, we in-
+                                                                                                            Generally, the KT task can be formalized as follows: given a
+                                        troduce regularization terms that correspond to reconstruction
+                                                                                                            student’s historical interactions Xt = (x1 , x2 , ..., xt ) up to time
+                                        and waviness to the loss function of the original DKT model
+                                                                                                            t on a particular learning task, it predicts some aspects of his
+                                        to enhance the consistency in prediction. Experiments show
+                                                                                                            next interaction xt+1 . Question-and-answer interactions are
+                                        that the regularized loss function effectively alleviates the two
+                                                                                                            the most common type in KT, and thus xt is usually repre-
+                                        problems without degrading the original task of DKT.1
+                                                                                                            sented as an ordered pair (qt , at ) which constitutes a tag for the
+                                                                                                            question qt being answered at time t and an answer label at
+                                        ACM Classification Keywords
+                                                                                                            indicating whether the question has been answered correctly.
+                                        I.2.6 Artificial Intelligence: Learning; K.3.m Computer and         In many cases, KT usually seeks to predict the probability
+                                        Education: Miscellaneous                                            that the student will answer the question correctly during the
+                                                                                                            next time-step, i.e., p(at+1 = 1|qt+1 , Xt ). Many approaches
+                                        Author Keywords                                                     have been developed to solve the KT problem, such as using
+                                        Knowledge tracing; Deep learning; Regularization;                   the hidden Markov model (HMM) in Bayesian knowledge
+                                        Educational data mining; Personalized learning; Sequence            tracing (BKT) [2] and the logistic regression model in perfor-
+                                        modeling                                                            mance factors analysis (PFA) [11]. More recently, a recurrent
+                                                                                                            neural network (RNN) model has been applied in a method
+                                        INTRODUCTION                                                        called deep knowledge tracing (DKT) [12]. Experiments show
+                                        With the advancement of digital technologies, online platforms      that DKT outperforms traditional methods without requiring
+                                        for intelligent tutoring systems (ITSs) and massive open online     substantial feature engineering by humans.
+                                        courses (MOOCs) are becoming prevalent. These platforms
+                                                                                                            Although DKT achieves impressive performance for the KT
+                                        1
+                                         The implementation of this work is available on https://github.    task, we have noticed two major problems in the prediction re-
+                                        com/ckyeungac/deep-knowledge-tracing-plus.
+                                                                                                            sults of DKT when trying to replicate the experiments in [12]
+                                                                                                            (where the authors adopted the skill-level tag as the question
+                                                                                                            tag.) These two problems are illustrated using a heatmap in
+                                                                                                            Figure 1, which visualizes the predicted knowledge state at
+                                                                                                            each time-step of a student (namely id-1) from the ASSIST-
+                                                                                                            ment 2009 skill builder dataset.
+                                                                                                            The first problem of DKT is that the DKT model fails to re-
+                                                                                                            construct the input information in prediction. When a student
+                                        .
+        s32                                                                                                                  1.0
+        s33                                                                                                                  0.8
+        s45                                                                                                                  0.6
+        s55                                                                                                                  0.4
+        s98                                                                                                                  0.2
+              (s55,1)
+              (s45,1)
+              (s55,1)
+              (s55,1)
+              (s55,0)
+              (s45,0)                                                                                                        0.0
+              (s98,1)
+              (s98,1)
+              (s98,1)
+              (s33,0)
+              (s32,0)
+              (s33,0)
+              (s32,0)
+              (s33,0)
+              (s32,0)
+              (s33,0)
+              (s32,0)
+              (s32,0)
+              (s33,0)
+              (s32,1)
+              (s33,1)
+              (s32,0)
+              (s33,0)
+              (s32,0)
+              (s33,0)
+              (s33,0)
+              (s32,0)
+              (s33,0)
+              (s32,0)
+              (s32,0)
+              (s33,0)
+              (s32,1)
+              (s33,1)
+              (s33,1)
+              (s32,1)
+              (s32,0)
+              (s33,0)
+              (s33,0)
+              (s32,0)
+              (s33,0)
+              (s32,0)
+              (s33,1)
+              (s32,1)
+              (s33,0)
+              (s32,0)
+              (s33,1)
+              (s33,1)
+
+Figure 1: A student, namely id-1, from the ASSISTment 2009 dataset is used to plot the heatmap illustrating the two problems in
+DKT. The label si in the vertical dimension corresponds to the skill tag, and only those which have been answered by the student
+are shown. The label in the horizontal dimension refers to the input fed into the DKT at each time-step. The color of the heatmap
+indicates the predicted probability that the student will answer si correctly in the next time-step, i.e., p(at+1 = 1 | qt+1 = si ). The
+darker the color, the higher the probability.
+
+
+performs well in a learning task related to a skill si , the model’s     the consistency between the current observation and the
+predicted performance for the skill si may drop instead, and             corresponding change in prediction.
+vice versa. For example, at the 6th time-step in Figure 1, the
+probability of correctly answering the exercise related to s45
+increases compared to the previous time-step even though the           BACKGROUND
+student answered s45 incorrectly.                                      Researchers have been investigating mathematical and compu-
+                                                                       tational models to tackle the KT task since the 1990s. Various
+Second, it is observed that the transition in prediction outputs,      approaches, ranging from probabilistic models to deep neural
+i.e., the student’s knowledge states, across time-steps is not         networks, have been developed over the past two decades.
+consistent. As depicted in Figure 1, there are sudden surges
+and plunges in the predicted performance of some skills across         The Bayesian knowledge tracing (BKT) model was proposed
+time-steps. For example, the probabilities of correctly answer-        in [2] during the 1990s. It models the knowledge states of KCs
+ing s32 , s33 , s45 , and s55 fluctuate when the student answers       using one HMM for each KC. Specifically, the hidden state
+s32 and s33 in the middle of the learning sequence. This is            in the HMM represents the student’s knowledge state which
+intuitively undesirable and unreasonable as students’ knowl-           indicates whether or not the KC is mastered. However, many
+edge state is expected to transit gradually over time, but not to      simplifying assumptions adopted by BKT are unrealistic. For
+alternate between mastered and not-yet-mastered. Such wavy             example, BKT assumes that forgetting does not occur and the
+transitions are therefore not favorable as it would mislead the        KCs are mutually independent. To address these shortcomings,
+interpretation of the student’s knowledge state.                       some variants of BKT such as those with forgetting power [4]
+                                                                       and skill dependency [5] have been proposed. Extensive works
+To address the problems described above, we propose to aug-            have also been conducted to empower the individualization
+ment the original loss function of the DKT model by intro-             of BKT on both skill-specific parameters [9, 10] and student-
+ducing additional quality measures other than the original one         specific parameters [20]. Some other attempts have been made
+which solely considers the prediction accuracy of the next             to extend the capabilities of BKT on the partial score [17],
+interaction. Specifically, we define the reconstruction error          sub-skills and temporal features [3], and more features from
+and waviness measures and use them to augment the original             cognitive science such as the recency effect and contextualized
+loss function as a regularized loss function. Experiments show         trial sequences [6]. However, it should be noted that such
+that the regularized DKT is more accurate in reconstructing            extensions often require considerable feature engineering ef-
+the answer label of the observed input and is more consistent          forts and may incur a significant increase in the computational
+in its prediction across time-steps, yet without sacrificing the       requirements.
+prediction accuracy for the next interaction.
+                                                                       In the 2000s, learning factors analysis (LFA) [1] was proposed
+Our main contributions are summarized as follows:                      to model student knowledge states using the logistic regres-
+• Two problems in DKT that have not been revealed in the               sion model to deal with the multi-KCs issue and to incorporate
+  literature are raised: failure in current observation recon-         student ability into the model. There is a reconfiguration of the
+  struction and wavy prediction transition;                            LFA, called performance factors analysis (PFA) [11], which
+                                                                       offers higher sensitivity to student performance rather than
+• Three regularization terms for enhancing the consistency of          student ability. Both LFA and PFA exploit the number of
+  prediction in DKT are proposed: r to address the reconstruc-         successes or failures of applying a KC to predict whether a
+  tion problem, and w1 and w2 to address the wavy prediction           student has acquired the knowledge about the KC. Although
+  transition problem;                                                  both LFA and PFA can handle a learning task that is associ-
+                                                                       ated with multiple KCs, they cannot deal with the inherent
+• Five other performance measures are proposed to evaluate             dependency among KCs, e.g., “addition” is a prerequisite of
+  three aspects of goodness in KT: AUC(C) for the prediction           “multiplication”. Moreover, the features used in LFA and PFA
+  performance of the current interaction, w1 and w2 for the            are relatively simple and they cannot provide a deep insight
+  waviness in KT’s prediction overall, and m1 and m2 for               into students’ latent knowledge state.
+Recently, with a surge of interest in deep learning models,                     model is parameterized by a weight matrix W and a bias
+DKT [12], which models student’s knowledge state based                          vector b with appropriate dimensions.
+on an RNN, has been shown to outperform the traditional
+models, such as BKT and PFA, without the need for human-                        Piech et al. [12] adopts an RNN variant with long short-term
+engineered features such as recency effect, contextualized trial                memory (LSTM) cells. An LSTM cell incorporates three gates
+sequence, inter-skill relationship, and students’ ability varia-                to imitate the human memory system [8] so as to calculate
+tion [6]. Since the DKT was proposed, a few comprehensive                       the hidden state ht . The three gates are forget gate ft , input
+studies have been reported to compare DKT with other KT                         gate it and output gate ot , which control a memory cell state ct .
+models [18, 19] or to apply the ideas of DKT to other applica-                  Mathematically, they are simply three vectors calculated based
+tions [14, 16, 15]. Nevertheless, to the best of our knowledge,                 on the current input xt and the previous hidden state ht−1 :
+all such attempts in the literature evaluate the DKT model                                        ft = σ(W f [xt , ht−1 ] + b f ),
+mainly with respect to the prediction of the next interaction                                     it = σ(Wi [xt , ht−1 ] + bi ),
+based on the area under the ROC curve (AUC) measure, with-
+out considering other quality aspects in the prediction result.                                   ot = σ(Wo [xt , ht−1 ] + bo ),
+                                                                                where [·] denotes concatenation. Different gates play different
+Review of Deep Knowledge Tracing                                                roles to control what information should be stored in ct . The
+Recurrent Neural Networks                                                       forget gate ft decides what information to forget from the
+DKT employs the RNN as its backbone model (see Fig-                             previous memory cell state ct−1 , while the input gate it decides
+ure 2). A (vanilla) RNN [7] aims to map an input sequence                       what new information c̃t should be added to the recent cell
+(x1 , x2 , . . . , xT ) to an output sequence (y1 , y2 , . . . , yT ). To map   state ct . Thus, the recent cell state ct depends on the previous
+the input to the output, the input vector undergoes a series of                 cell state after forgetting and the new information added from
+transformations via a hidden layer, which captures useful infor-                the input gate. Eventually, the output gate ot determines what
+mation that is hard to human-engineer, and forms a sequence                     information should be extracted from ct to form the hidden
+of hidden states (h1 , h2 , . . . , hT ). More concretely, at time-step         state ht . These can be expressed mathematically as follows:
+t, the hidden state ht is the encoding of the past information
+                                                                                                 c̃t = tanh(Wc [xt , ht−1 ] + bc ),
+obtained up to time-step t − 1, i.e., ht−1 , and the current input
+xt . The input-to-hidden transformation and hidden-to-output                                     ct = ft ⊗ ct−1 + it ⊗ c̃t ,
+transformation can be stated mathematically as follows:                                          ht = ot ⊗ tanh(ct ),                          (3)
+                 ht = tanh(Whx xt + Whh ht−1 + bh )                     (1)     where ⊗ denotes element-wise multiplication. This formula-
+                 yt = σ(Why ht + by )                                   (2)     tion empowers RNN to store information occurred in a dis-
+                                                                                tance history, and thus has a more powerful capability than the
+where both the hyperbolic tangent tanh(·) and the sigmoid                       vanilla RNN. The unfolded RNN architecture is visualized in
+function σ(·) are applied in an element-wise manner. The                        Figure 2, with a high-level interpretation of DKT.
+
+
+
+
+                         Output layer:
+                         Predicted       knowledge     state,
+                         based on the current hidden
+                         state, i.e., the latent encoding of
+                         knowledge state.
+
+
+
+
+                         Hidden layer:
+                         Latent encoding of knowledge
+                         state, based on the current input
+                                                                                                        ...
+                         and previous latent encoding of
+                         knowledge state.
+
+
+
+                         Input layer:
+                         Vectorized question-and-answer
+                         interaction passed into the
+                         network to update the hidden
+                         state.
+
+
+
+
+Figure 2: Unfolded version of the RNN architecture for DKT. The hidden state is processed differently in the vanilla RNN (eq. (1))
+or LSTM-RNN (eq. (3)). h0 is the initial hidden state in the RNN, and it is usually initialized randomly or to a zero vector.
+DKT Problem Formulation                                                                  significantly compared to the previous time-step. This prob-
+To train a DKT model, an interaction (qt , at ) needs to be trans-                       lem can be attributed to the loss function defined in the DKT
+formed into a fixed-length input vector xt . As a question can                           model (eq. (4)). Specifically, the loss function takes only the
+be identified by a unique ID, it can be represented using one-                           predicted performance of the next interaction into account,
+hot encoding as a vector δ(qt ). The corresponding answer                                but not the predicted performance of the current one. Accord-
+label can also be represented as the one-hot vector δ(qt ) of                            ingly, when the input order ((s32 , 0), (s33 , 0)) occurs frequently
+the corresponding question if a student answers it correctly,                            enough, the DKT model will tend to learn that if a student an-
+or a zero vector 0 otherwise. Therefore, if there are M unique                           swers s32 incorrectly, he/she will likely answer s33 incorrectly,
+questions, then xt ∈ {0, 1}2M .                                                          but not s32 . Consequently, the prediction result is counterintu-
+                                                                                         itive for the current observed input.
+After the transformation, DKT passes the xt to the hidden layer
+and computes the hidden state ht using the vanilla RNN or                                However, one might argue that such transition in prediction
+LSTM-RNN. As the hidden state summarizes the information                                 reveals that s32 is a prerequisite of s33 .3 This is because the
+from the past, the hidden state in the DKT can therefore be                              predicted performance for s32 is lower only when the DKT
+conceived as the latent knowledge state of student resulted                              model receives (s33 , 0), but it is higher when the DKT model
+from his past learning trajectory. This latent knowledge state                           receives (s32 , 0). To gainsay the above argument, we are going
+is then disseminated to the output layer to compute the output                           to impeach by contradiction. We hypothesize that if s32 is
+vector yt , which represents the probabilities of answering each                         indeed a prerequisite of s33 , then when a student answers s32
+question correctly. For student i, if she has a sequence of                              incorrectly in the current time-step, it is more probable that
+question-and-answer interactions of length T i , the DKT model                           he/she will answer s33 incorrectly in the next time-step, but
+maps the inputs (xi1 , xi2 , . . . , xiTi ) to the outputs (yi1 , yi2 , . . . , yiTi )   not vice versa. To verify this hypothesis, Tables 1 and 2 are
+accordingly.                                                                             made to tabulate the frequency counts when s32 and s33 appear
+                                                                                         consecutively in different orders. According to the above
+The objective of the DKT is to predict the next interaction                              hypothesis, it is expected that the lower right cell will have a
+performance, so the target prediction will be extracted by                               larger value than the lower left cell in Table 1, but not Table 2.
+performing a dot product of the output vector yit and the one-
+hot encoded vector of the next question δ(qit+1 ). Based on the                                                               Next = s33
+predicted output and the target output ait+1 , the loss function                                                          Correct Incorrect       Total
+L can be expressed as follows:                                                                              Correct        1543       159         1702
+                                                                                          Current = s32
+                            n T −1
+                           X i
+                                                                                                           Incorrect       81        367         448
+                   1             X                      
+                                                                                                              Total        1624       526         2510
+       L = Pn                    l yt · δ(qt+1 ), at+1 
+                                       i      i       i
+                                                               (4)
+              i=1 (T i − 1) i=1 t=1
+                               
+                                                                                         Table 1: Correctness matrix when the current skill is s32 and
+where n is the number of students and l(·) is the cross-entropy                          the next skill is s33 .
+loss.                                                                                                                      Next = s32
+                                                                                                                       Correct Incorrect Total
+SOME PROBLEMS OF DKT AND THEIR REMEDIES                                                                      Correct    1362        72      1434
+While we were replicating the experiments on the original                                  Current = s33
+                                                                                                             Incorrect   90        361       451
+DKT proposed in [12] using the skill builder dataset provided                                                    Total  1452       433      1885
+by ASSISTment in 2009 (denoted ASSIST2009)2 , we noticed
+two major problems in the prediction results of DKT. First, it                           Table 2: Correctness matrix when the current skill is s33 and
+sometimes fails to reconstruct the input observation because                             the next skill is s32 .
+the prediction result is counterintuitive. When a student an-
+swers a question of skill si correctly/incorrectly, the predicted                        From Table 1, we can see that if a student answers s32 incor-
+probability of that student answering si correctly sometimes                             rectly in the current time-step, it is more probable that he/she
+decreases/increases instead. Second, the predicted knowledge                             will answer s33 incorrectly in the next time-step. However,
+state is wavy and inconsistent over time. This is not desirable                          Table 2 shows that if a student answers s33 incorrectly, it is
+because student’s knowledge state is expected to transit only                            also more probable that he/she will answer s32 incorrectly in
+gradually and steadily over time. Therefore, we propose three                            the next time-step. This means that an inverse dependency
+regularization terms to rectify the consistency problem in the                           also exists and contradicts the above hypothesis, and therefore
+prediction of DKT: reconstruction error r to resolve the re-                             the statement that s32 is a prerequisite of s33 becomes ques-
+construction problem, and waviness measures w1 and w2 to                                 tionable. Moreover, the distributions of these two matrices
+smoothen the predicted knowledge state transition.                                       would advocate that s32 and s33 are likely to be interdependent
+                                                                                         and acquired simultaneously.
+Reconstruction Problem
+As we saw from Figure 1, when the student answers s32 in-                                If s32 is not a prerequisite of s33 and they should be acquired at
+correctly, the probability of correctly answering s32 grows                              the same time, then there should be room for improvement to
+                                                                                         deal with cases like s32 and s33 in DKT. As mentioned above,
+2
+    More information about the dataset can be found in
+                                                                                         3
+https://sites.google.com/site/assistmentsdata/home/                                        We note that s32 is “Ordering Positive Decimals” and s33 is “Order-
+assistment-2009-2010-data.                                                               ing Fractions”.
+the loss function considers only the predicted performance           distribution with zero mean and small variance. For fair com-
+of the next interaction but ignores the current one. An im-          parison, we follow the hyperparameter setting in [12] even
+mediate remedy to alleviate the problem is to regularize the         though it may not be optimal. A single-layer RNN-LSTM
+DKT model by taking the loss between the prediction and the          with a state size of 200 is used as the basis of the DKT model.
+current interaction into consideration. By doing so, the model       The learning rate and the dropout rate are set to 0.01 and 0.5,
+will adjust the prediction with respect to the current input.        respectively. In addition, we also consistently set the norm
+Thus, a regularization term for the reconstruction problem is        clipping threshold to 3.0. Moreover, our preliminary exper-
+defined as follows:                                                  iment using ASSIST2009 shows that using the exercise tag
+                              n T −1
+                             X i
+                                                                    as the question tag induces data sparsity and results in poor
+                     1            X                    
+                                                                     performance4 , so we adopt the skill tag to be the question tag
+          r = Pn               
+                                    l yt · δ(qt ), at  .
+                                         i      i     i
+                                                               (5)
+                i=1(T i − 1) i=1 t=1                                in the following experiment.
+Wavy Transition in Prediction                                        Hyperparameter search
+The second problem is the wavy transition in the student’s           We perform hyperparameter search for the regularization pa-
+predicted knowledge state. This problem may be attributed            rameters λr , λw1 and λw2 . At first, each parameter is examined
+to the hidden state representation in the RNN. The hidden            separately to identify a range of values giving good results
+state ht is determined by the previous hidden state ht−1 and the     according to some evaluation measures to be explained later.
+current input xt . It summarizes the student’s latent knowledge      The initial search ranges for λr , λw1 and λw2 are {0, 0.25, 0.5,
+state of all the exercises in one single hidden layer. Although      1.0}, {0, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0},
+it is difficult to explicate how the elements in the hidden layer    and {0, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0,
+influence the predicted performance of the KCs, it is plausible      100.0}, respectively. After narrowing down the range of each
+to confine the hidden state representation to be more invariant      parameter, a grid search over combinations of λr , λw1 and λw2
+via regularization over the output layer.                            is conducted. The final search ranges for λr , λw1 and λw2 are
+                                                                     {0, 0.05, 0.10, 0.15, 0.20, 0.25}, {0, 0.01, 0.03, 0.1, 0.3, 1.0},
+We define two waviness measures w1 and w2 as regularization          and {0, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0}, respectively.
+terms to smoothen the transition in prediction:
+                     Pn PTi −1 i          i                          Evaluation Measures
+                       i=1 t=1 kyt+1 − yt k1                         The performance of the DKT is customarily evaluated by AUC,
+               w1 =         Pn                ,         (6)
+                         M i=1 (T i − 1)                             which provides a robust metric for binary prediction evaluation.
+                     Pn PTi −1 i          i 2                        An AUC score of 0.5 indicates that the model performance
+                       i=1 t=1 kyt+1 − yt k2
+               w22 =        Pn                .         (7)          is merely as good as random guess. In this paper, we report
+                         M i=1 (T i − 1)                             not only the AUC for the next performance prediction (named
+To quantify how disparate the two prediction vectors are, both       AUC(N) in this paper for clarity) which is tantamount to the
+L1-norm and L2-norm are used to measure the difference               evaluation in [12], but also five other quantities with respect
+between the prediction results yit and yit+1 . This is similar       to the reconstruction accuracy and consistency of the input
+to the elastic net regularization [22]. The two measures are         observation as well as the waviness of the prediction result.
+averaged over the total number of input time-steps and the           For the reconstruction accuracy, the AUC for the current per-
+number of KCs M. Thus, the magnitude of w1 would be seen             formance prediction (called AUC(C)) is used. With regard
+as the average value change of each component in the output          to the consistency in prediction of the input observation, two
+vector between yt and yt+1 . The larger the values of w1 and         more quantities m1 and m2 are defined to measure the con-
+w2 , the more inconsistent the transitions in the model.             sistency between the observed input and the change in the
+In summary, the original loss function is augmented by in-           corresponding prediction. For a single student i at time t, we
+corporating three regularization terms to give the following         define
+regularized loss function:                                                                     i
+                                                                                                                             
+                                                                                mi1,t = (−1)1−at sign (yit − yit−1 ) · δ(qit ) ,  (9)
+                L0 = L + λr r + λw1 w1 + λw2 w22              (8)                           1−ait
+                                                                                                                       
+                                                                                m2,t = (−1)
+                                                                                  i
+                                                                                                   (yt − yt−1 ) · δ(qt ) ,
+                                                                                                     i    i          i
+                                                                                                                                 (10)
+where λr , λw1 and λw2 are regularization parameters. By train-
+ing with this new loss function, the DKT model is expected to        and
+address the reconstruction and wavy transition problems.                                         Pn PT i       i
+                                                                                                    i=1   t=2 m1,t
+                                                                                           m1 = P n                  ,             (11)
+EXPERIMENTS                                                                                       i=1 (T i − 1)
+                                                                                                Pn PT i i
+Implementation                                                                                   i=1 t=2 m2,t
+Experiment settings
+                                                                                           m2 = P n             .                  (12)
+                                                                                                  i=1 (T i − 1)
+In the following experiments, 20% of the data is used as a
+test set and the other 80% is used as a training set. Further-       Accordingly, when the model gives a correct change in predic-
+more, 5-fold cross-validation is applied on the training set to      tion with respect to the input, we will obtain positive values
+select the hyperparameter setting. The test set is used to evalu-    for mi1,t and mi2,t . Otherwise negative values will be obtained.
+ate the model, and also to perform early stopping [13]. The          4
+                                                                       An AUC of 0.73 if 26,668 exercise IDs are used; an AUC of 0.82 if
+weights of the RNN are initialized randomly from a Gaussian          124 unique skill IDs are used.
+ Dataset         λr     λw1     λw2          AUC(N)           AUC(C)                w1               w2                m1                m2
+                0.0      0.0    0.0   0.8212±0.00023   0.9044±0.00151   0.0830±0.00381   0.1279±0.00535    0.3002±0.01832    0.0156±0.00205
+ ASSIST2009
+                0.1   0.003     3.0   0.8227±0.00041   0.9625±0.00365   0.0229±0.00022   0.0491±0.00033    0.4486±0.00427    0.0573±0.00132
+                0.0      0.0    0.0   0.7365±0.00045   0.8846±0.00185   0.0282±0.00116   0.0414±0.00162    0.6208±0.00799    0.0476±0.00044
+ ASSIST2015
+               0.05    0.03     3.0   0.7371±0.00017   0.9233±0.00180   0.0124±0.00017   0.0210±0.00018    0.8122±0.00915    0.0591±0.00029
+                0.0      0.0    0.0   0.7343±0.00021   0.7109±0.00579   0.0690±0.00130   0.1045±0.00181    0.1151±0.00920   -0.0055±0.00199
+ ASSISTChall
+                0.1      0.3    3.0   0.7285±0.00024   0.8570±0.00175   0.0147±0.00053   0.0301±0.00091    0.3052±0.00729    0.0441±0.00039
+                0.0      0.0    0.0   0.8159±0.00037   0.7404±0.00556   0.1358±0.00970   0.1849±0.01308   -0.2590±0.01124   -0.0658±0.00502
+ Statics2011
+               0.20      1.0   30.0   0.8349±0.00029   0.9038±0.00431   0.0074±0.00023   0.0130±0.00016    0.4761±0.03587    0.0315±0.00303
+                0.0      0.0    0.0   0.8255±0.00034   0.8642±0.00265   0.0426±0.00136   0.0588±0.00199   -0.1512±0.02501   -0.0134±0.00569
+ Simulated-5
+               0.20   0.001    10.0   0.8264±0.00061   0.9987±0.00081   0.0196±0.00013   0.0426±0.00164    0.9064±0.01948    0.1659±0.00830
+
+Table 3: The average test results of the evaluation measures, as well as their standard deviations from 3 trials are reported for both
+the DKT (with λr = λw1 = λw2 = 0.0) and DKT+ models. The hyperparameter setting reported for DKT+ is selected according
+to the following procedure using 5-fold cross-validation: (1) select the DKT+ models with a lower value of w1 than DKT, and
+(2) among them, select the DKT+ with the highest value of AUC(N) + AUC(C) + m1 + m2 .
+
+
+A positive value of m1 indicates that more than half of the               We have adopted the processed data provided by [21] with a
+predictions comply with the input observations; a zero value              train/test split of ratio 70:30, and exercise tags are used.
+implies that the model makes half of the predictions change
+in the right direction while another half change in a wrong               Simulated-5
+direction; a negative value means that the model makes more               Piech et al. [12] also simulated 2000 virtual students’ answer-
+than half of the predictions change in a wrong direction. A               ing trajectories in which the exercises are drawn from five
+similar interpretation also holds for m2 though it takes changes          virtual concepts. Each student answers the same sequence of
+in both the direction and magnitude into account. Accordingly,            50 exercises each of which has a single concept k ∈ {1, . . . , 5}
+the higher the values of m1 and m2 are, the better the model              and a difficulty level β, with an assigned ability αk of solv-
+is from the perspective of consistency in prediction for the              ing the task related to the skill k. The probability of a student
+current observation.                                                      answering an exercise correctly is defined based on the conven-
+                                                                          tional item response theory as p(correct|α, β) = c + 1+exp(β−α)
+                                                                                                                                     1−c
+                                                                                                                                            ,
+Besides, the waviness measures w1 and w2 are also used as                 where c denotes the probability of guessing it correctly and it
+performance measures to quantify the consistency in predic-               is set to 0.25.
+tion of the other KCs in the model. We deem that a good DKT
+model should achieve a high AUC score while maintaining a                 Results
+low waviness value.
+                                                                          The experiment results are shown in Table 3 which gives a
+                                                                          comparison of DKT models with and without regularization
+Datasets
+                                                                          with respect to all of the evaluation measures. For clarity, here
+ASSISTment 2009 (ASSIST2009)
+                                                                          the DKT model without regularization is simply denoted as
+This dataset is provided by the ASSISTments online tutoring               DKT, while the DKT model with regularization is denoted as
+platform and has been used in several papers for the evaluation           DKT+.
+of DKT models. Owing to the existence of duplicated records
+in the original dataset [19], we have removed them before                 For the ASSIST2009 dataset, the DKT achieves an average test
+conducting our experiments. The resulting dataset contains                AUC(N) of 0.8212, while the DKT+ performs slightly better
+4,417 students with 328,291 question-answering interactions               with an AUC(N) of 0.8227. However, for the DKT+, there
+from 124 skills. Some of the students in this dataset are used            is a considerable improvement in AUC(C) with an increase
+for visualizing the prediction result.                                    from 0.9044 to 0.9625. The waviness quantities also decrease
+                                                                          significantly, from 0.0830 to 0.0229 for w1 and from 0.1279 to
+ASSISTment 2015 (ASSIST2015)                                              0.0491 for w2 . Moreover, although the DKT has already made
+This dataset contains 19,917 student responses for 100 skills             half of the predictions change in the right direction, the DKT+
+with a total of 708,631 question-answering interactions. Al-              further uplifts the values of m1 and m2 from 0.3002 to 0.4486
+though it contains more interactions than ASSIST2009, the                 and from 0.0156 to 0.0573, respectively.
+average number of records per skill and student is actually
+smaller due to a larger number of students.                               Similar improvements in the evaluation measures are ob-
+                                                                          served in ASSIST2015 as well. The DKT+ retains a similar
+ASSISTment Challenge (ASSISTChall)                                        AUC(N) of 0.7371, compared to that of the DKT. The values
+This dataset has been made available for the 2017 ASSIST-                 of AUC(C), m1 and m2 are boosted to 0.9233, 0.8122 and
+ments data mining competition. It is richer in terms of the               0.0591, respectively. Moreover, the values of w1 and w2 in the
+average number of records per student as there are 686 students           DKT+ are only half of those for the DKT.
+with 942,816 interactions and 102 skills.
+                                                                          As for ASSISTChall, although the performance of AUC(N)
+Statics2011                                                               slightly decreases from 0.7343 to 0.7285 in the DKT+, im-
+This dataset is obtained from an engineering statics course with          provement with respect to the other evaluation criteria is very
+189,927 interactions from 333 students and 1,223 exercise tags.           significant. The DKT+ pushes the AUC(C) from 0.7109 to
+                             ASSIST2009                                                                  ASSIST2015                                                  ASSISTChall                                                       Statics2011                                                          Simulated-5
+                                                                      1.00                                                                                                                                                                                                       1.000
+                                                                                                                                             0.95                                                              0.975
+      0.975
+                                                                      0.95                                                                                                                                     0.950                                                             0.975
+      0.950                                                                                                                                  0.90
+                                                                                                                                                                                                               0.925                                                             0.950
+      0.925                                                           0.90
+                                                      AUC(N)                                                                 AUC(N)          0.85                                            AUC(N)            0.900                                             AUC(N)          0.925                                             AUC(N)
+AUC   0.900                                           AUC(C)    AUC   0.85                                                   AUC(C)    AUC                                                   AUC(C)      AUC                                                     AUC(C)    AUC                                                     AUC(C)
+                                                                                                                                                                                                               0.875                                                             0.900
+      0.875                                                                                                                                  0.80
+                                                                      0.80                                                                                                                                     0.850                                                             0.875
+      0.850                                                                                                                                  0.75                                                              0.825                                                             0.850
+      0.825                                                           0.75
+                                                                                                                                                                                                               0.800                                                             0.825
+                                                                                                                                             0.70
+              0.00    0.05   0.10     0.15     0.20      0.25                0.00   0.05             0.10     0.15    0.20      0.25                0.00   0.05      0.10     0.15    0.20        0.25                 0.00   0.05     0.10     0.15      0.20      0.25                 0.00   0.05        0.10     0.15   0.20      0.25
+                                lambda_r                                                                lambda_r                                                        lambda_r                                                          lambda_r                                                             lambda_r
+
+
+
+                     Figure 3: Average test AUC(N) and AUC(C) for different values of λr over different combinations of λw1 and λw2 .
+
+
+0.8570 and reduces the w1 from 0.0690 to 0.0147 and the w2                                                                                                                    correct. Moreover, the waviness in the prediction transition is
+from 0.1045 to 0.0301. Moreover, the DKT+ also improves                                                                                                                       also reduced.
+the performance in m1 and m2 , from 0.1151 to 0.3052 and
+                                                                                                                                                                              In summary, the experiment results reveal that the regulariza-
+from −0.0055 to 0.0441, respectively.
+                                                                                                                                                                              tion based on r, w1 and w2 effectively alleviates the reconstruc-
+For statics2011, a noticeable increase is observed in both                                                                                                                    tion problem and the wavy transition in prediction without
+AUC(N) and AUC(C), from 0.8159 to 0.8349 and from 0.7404                                                                                                                      sacrificing the prediction accuracy for the next interaction.
+to 0.9038, respectively. Moreover, w1 and w2 shrink from                                                                                                                      Furthermore, for some combinations of λr , λw1 and λw2 , the
+0.1358 to 0.0074 and from 0.1849 to 0.0130, respectively.                                                                                                                     DKT+ even slightly outperforms the DKT in AUC(N).
+This substantial decrease in w1 and w2 would be ascribed to
+the large number of exercises in the dataset since the waviness                                                                                                               DISCUSSION
+regularizers act to confine the prediction changes on those
+                                                                                                                                                                              Apart from the experiment results, we plot Figures 3 and 4 to
+exercises which are unrelated to the input. With a potentially
+                                                                                                                                                                              better understand how the regularizers based on reconstruction
+substantial amount of unrelated exercises, w1 and w2 shrink
+                                                                                                                                                                              and waviness affect the performance with respect to different
+significantly as a result. The DKT+ also ameliorates the situa-
+                                                                                                                                                                              evaluation measures.
+tion that DKT makes more than half of the predictions change
+in the wrong direction. The values of m1 and m2 surge from                                                                                                                    In Figure 3, we plot the average test AUC(N) and AUC(C) of
+−0.25952 to 0.47597 and from −0.05090 to 0.05712, respec-                                                                                                                     different values of λr over all combinations of λw1 and λw2 . It
+tively.                                                                                                                                                                       is observed that the higher the λr is, the higher the AUC(C)
+                                                                                                                                                                              is achieved for all of the datasets. On the other hand, the
+With regard to Simulated-5, the DKT and the DKT+ result in a
+                                                                                                                                                                              AUC(N) generally decreases when the λr increases, but the
+similar AUC(N), of 0.8252 and 0.8264, respectively. However,
+                                                                                                                                                                              downgrade in AUC(N) is not significant compared with the
+the DKT+ gives a huge improvement in AUC(C), m1 and
+                                                                                                                                                                              upgrade in AUC(C). This reveals that the reconstruction regu-
+m2 . The DKT+ boosts the values of AUC(C) from 0.8642 to
+                                                                                                                                                                              larizer r robustly resolves the reconstruction problem, without
+0.9987, m1 from −0.1512 to 0.9064 and m2 from −0.0134 to
+                                                                                                                                                                              sacrificing much of the performance in AUC(N). Moreover,
+0.1659. This means the DKT+ model makes almost all of the
+                                                                                                                                                                              from the result in Table 3, we are usually able to find a com-
+predictions and the prediction changes for the input exercise
+                                                                                                                                                                              bination of λr , λw1 and λw2 that gives a comparable or even
+
+                                               Avg. AUC(N)                                                                                                 Avg. w1                                                                                         Avg. m1
+
+                                                                                     0.82                                                                                                                                                                                                     0.525
+                                                                                                               0.82                                                                       0.08                                                                                                0.500             0.525
+                                                                                     0.81
+                                                                                           Avg. AUC(N)
+                                                                                                                                                                                                                0.08                                                                          0.475             0.500
+                                                                                                                                                                                              Avg. w1                                                                                             Avg. m1
+                                                                                                               0.81                                                                      0.06                                                                                                                   0.475
+                                                                                    0.80                                                                                                                        0.06                                                                          0.450
+                                                                                                               0.80                                                                      0.04                                                                                                0.425              0.450
+                                                                                    0.79                                                                                                                        0.04                                                                         0.400              0.425
+                                                                                                               0.79                                                                      0.02                                                                                                0.375              0.400
+                                                                                    0.78
+                                                                                                                                                                                                                0.02                                                                         0.350              0.375
+                                                                                 100.0                         0.78                                                                   100.0                                                                                                 100.0
+                                                                               30.0
+                                                                              10.0                                                                                                  30.0
+                                                                                                                                                                                   10.0                                                                                                    30.0
+                                                                                                                                                                                                                                                                                         10.0                   0.350
+                                                                             3.0
+                                                                           1.0                                                                                                    3.0
+                                                                                                                                                                                1.0                                                                                                    3.0
+                             0.001
+                                0.0030.01                                0.3
+                                                                       0.1     _ w 2                                              0.001
+                                                                                                                                     0.0030.01                                0.3
+                                                                                                                                                                            0.1     _ w 2                                            0.001
+                                                                                                                                                                                                                                        0.0030.01                               0.10.31.0 _w2
+                                         0.03                        0.03 bda                                                                 0.03                        0.03 bda                                                               0.03                         0.03      da
+                                       lambd0.1  0.3               0.01
+                                                                 0.003  lam                                                                 lambd0.1  0.3               0.01
+                                                                                                                                                                      0.003  lam                                                               lambd0.1 0.3 1.0             0.01
+                                                                                                                                                                                                                                                                          0.003    amb
+                                              a_w1 1.0 3.010.0 0.001                                                                               a_w1 1.0 3.010.0 0.001                                                                             a_w1      3.010.0 0.001    l
+
+
+                                               Avg. AUC(C)                                                                                                 Avg. w2                                                                                         Avg. m2
+
+                                                                                                                                                                                           0.14                                                                                                 0.065
+                                                                                     0.96                                                                                                                       0.14                                                                            0.060            0.065
+                                                                                                               0.96                                                                       0.12
+
+                                                                                           Avg. AUC(C)
+                                                                                                                                                                                                                0.12                                                                            0.055            0.060
+                                                                                                                                                                                                                                                                                                  Avg. m2
+                                                                                     0.94
+                                                                                                                                                                                              Avg. w2
+                                                                                                                                                                                          0.10
+                                                                                                               0.94                                                                                             0.10                                                                           0.050             0.055
+                                                                                     0.92                                                                                                 0.08
+                                                                                                                                                                                                                0.08                                                                           0.045             0.050
+                                                                                                               0.92                                                                       0.06
+                                                                                    0.90                                                                                                 0.04                   0.06                                                                           0.040             0.045
+                                                                                                               0.90                                                                      0.02                                                                                                  0.035             0.040
+                                                                                                                                                                                                                0.04
+                                                                                 100.0                                                                                                 100.0                                                                                                  100.0              0.035
+                                                                               30.0
+                                                                              10.0                                                                                                   30.0
+                                                                                                                                                                                    10.0                        0.02                                                                         30.0
+                                                                                                                                                                                                                                                                                           10.0
+                                                                             3.0
+                                                                           1.0                                                                                                     3.0
+                                                                                                                                                                                 1.0                                                                                                      3.0
+                             0.001
+                                0.0030.01                                0.3
+                                                                       0.1 da_  w 2                                               0.001
+                                                                                                                                     0.0030.01                              0.10.3 da_w
+                                                                                                                                                                                        2                                            0.001
+                                                                                                                                                                                                                                        0.0030.01                                    0.31.0 _w2
+                                                                                                                                                                                                                                                                                   0.1
+                                         0.03
+                                       lambd0.1
+                                                                     0.03
+                                                                   0.01     b                                                                 0.03
+                                                                                                                                            lambd0.1
+                                                                                                                                                                          0.03
+                                                                                                                                                                        0.01      b                                                              0.03
+                                                                                                                                                                                                                                               lambd0.1
+                                                                                                                                                                                                                                                                                 0.03
+                                                                                                                                                                                                                                                                               0.01      bda
+                                                 0.3             0.003
+                                              a_w1 1.0 3.010.0 0.001    lam                                                                           0.3             0.003
+                                                                                                                                                   a_w1 1.0 3.010.0 0.001    lam                                                                        0.3
+                                                                                                                                                                                                                                                      a_w1 1.0 3.010.0       0.003
+                                                                                                                                                                                                                                                                           0.001 l   a m
+
+
+
+Figure 4: 3-D mesh surface plots of AUC(N), AUC(C), w1 , w2 , m1 and m2 of different combinations of λw1 and λw2 , with a fixed
+λr = 0.1 from the ASSIST2009 dataset.
+better AUC(N). This implies that the waviness regularizers            knowledge state caused by the wavy transition problem, and
+can help to mitigate the slight degradation in AUC(N) incurred        enhance the interpretability of the knowledge state in DKT.
+by the reconstruction regularizer.
+                                                                      CONCLUSION AND FUTURE WORK
+To also see how the regularization parameters λw1 and λw2
+                                                                      This paper points out two problems which arise when interpret-
+affect the evaluation measures, their 3-D mesh plots, with a
+                                                                      ing DKT’s prediction results: (1) the reconstruction problem,
+fixed λr = 0.1, for the ASSIST2009 dataset are shown in Fig-
+                                                                      and (2) the wavy transition in prediction. Both problems are
+ure 4. The AUC(N) has a relatively flat and smooth surface
+                                                                      undesirable because it would mislead the interpretation of
+when λw1 lies between 0.0 and 1.0 and λw2 lies between 0.0
+                                                                      students’ knowledge states. We thereby proposed three regu-
+and 10.0. Within this region, the DKT+ model also results
+                                                                      larization terms for enhancing the consistency of prediction
+in a higher AUC(C) value between 0.94 and 0.96. The per-
+                                                                      in DKT. One of them is the reconstruction error r, which is
+formance of AUC(N) and AUC(C) starts to decline when λw1
+                                                                      evaluated in AUC(C), m1 and m2 . The other two are waviness
+and λw2 are larger than 1.0 and 10.0, respectively. It suggests
+                                                                      measures w1 and w2 , which are the norms for measuring the
+that the model performance has a low sensitivity in AUC(N)
+                                                                      changes between two consecutive prediction output vectors
+and AUC(C) with respect to the hyperparameters λw1 and λw2 .
+                                                                      and are used directly as evaluation measures. Experiments
+As for the waviness measures w1 and w2 , they decrease in a
+                                                                      show that these regularizers effectively alleviate the two prob-
+bell-like shape when λw1 and λw2 increase. With regard to the
+                                                                      lems without sacrificing the prediction accuracy (AUC(N))
+consistency measures, even though the mesh surface is a bit
+                                                                      on the original task which is to predict the next interaction
+bumpy, m1 increases along with larger values of λw1 and λw2
+                                                                      performance.
+within the same range mentioned above. This observation im-
+plies that both the reconstruction regularizer and the waviness       Although the reconstruction regularizer improves the perfor-
+regularizers help to improve the prediction consistency for the       mance with respect to AUC(C) and the waviness regularizers
+current input. On the other hand, m2 has a decreasing trend           reduce the waviness in the prediction transition, it is hard to
+with larger values of λw1 and λw2 . This is reasonable because        say how low the values of w1 and w2 should be in order to
+the waviness regularizers will reduce the prediction change           qualify for a good KT model. Ideally, a KT model should only
+between the outputs and thus the value of m2 , which takes the        change those prediction components which are related to the
+change in magnitude into account, is reduced. All in all, the         current input while keeping the other components unchanged
+robustness of the regularizers w1 and w2 is ascertained thanks        or only changed slightly due to some other subtle reasons, e.g.,
+to the low sensitivity in the prediction accuracy (AUC(N) and         forgetting. Nevertheless, the KC-dependency graphs are dif-
+AUC(C)), the observable reduction in the waviness measures            ferent from one dataset to another dataset, so different values
+(w1 and w2 ), and the improvement in the consistency measures         of w1 and w2 are expected in their ideal KT models.
+(m1 and m2 ).
+                                                                      Moreover, more work should be done on improving the sta-
+In addition to the overall goodness in terms of the evaluation        bility and accuracy of the prediction for unseen data, more
+measures, the prediction results of DKT and DKT+ for the              specifically the unobserved KCs. The objective function and
+student (id-1) are visualized in Figure 5 in order to give a          the evaluation measures for the DKT+ take only the current
+better sense of the regularization’s effect on the prediction.        and next interactions into account. There is no consideration
+Specifically, the prediction results are visualized in two line       for interactions in the further future, let alone the evaluation
+plots, in addition to the heatmap plot. The first line plot illus-    measures for the prediction precision of the unobserved KCs.
+trates the change in prediction of all the answered skills of the     Yet, unobserved KCs are of vital importance because an ITS
+DKT/DKT+ model, while the second line plot emphasizes the             should make personalized recommendation on the learning ma-
+change in prediction of each skill between DKT and DKT+,              terials for students over not only the observed KCs, but also the
+showing their differences in prediction. Concretely, as for           unobserved ones. An accurate estimation on the unobserved
+the DKT, it shows a relatively wavy transition of knowledge           KCs will help an ITS provide more intelligent pedagogical
+state across time-steps (Figure 5a). Moreover, the predicted          guidance to students. One of the possible extensions of this
+knowledge states of most of the skills share the same direc-          work is to take the further future interaction into account when
+tional change in prediction in DKT (Figure 5b). This means            training the DKT model:
+that when a student answers a question wrongly, most of the                                 n T −1 T −t                              
+predicted skills’ mastery level will decrease simultaneously,                         1 X iX i  X                            
+                                                                                 L =                  γ l yt · δ(qt+ j ), at+ j 
+                                                                                                          j−1   i
+                                                                                                                                        (13)
+and vice versa. However, it is intuitively untrue, as answering                       c i=1 t=1 j=1
+skill si wrongly does not necessarily lead to a knowledge fade
+in other skills. On the other hand, the DKT+ demonstrates             where c = ni=1 Tt=1       j=1 γ    is the normalizing term, γ
+                                                                                  P P i −1 PTi −t j−1
+a smooth prediction transition notably. For example, as seen          is the decay factor similar to that in reinforcement learning.
+from Figures 5a and 5c, when the DKT+ receives the inputs             This potentially leads the DKT model to learn a more robust
+(s32 , 0) or (s33 , 0), the changes in prediction for s45 , s55 and   representation of the latent knowledge state.
+s98 across time-steps are not as wavy as those in the DKT, re-
+vealing that DKT+ retains latent knowledge state in RNN for           ACKNOWLEDGMENTS
+s45 , s55 and s98 from the previous time-steps. This consistent
+                                                                      This research has been supported by the project ITS/205/15FP
+prediction will alleviate the misinterpretation of the student
+                                                                      from the Innovation and Technology Fund of Hong Kong.
+       s32                                                                                                                                              1.0
+       s33                                                                                                                                              0.8
+       s45                                                                                                                                              0.6
+       s55                                                                                                                                              0.4
+       s98                                                                                                                                              0.2
+             (s55,1)
+             (s45,1)
+             (s55,1)
+             (s55,1)
+             (s55,0)
+             (s45,0)                                                                                                                                    0.0
+             (s98,1)
+             (s98,1)
+             (s98,1)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s32,0)
+             (s33,0)
+             (s32,1)
+             (s33,1)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s32,0)
+             (s33,0)
+             (s32,1)
+             (s33,1)
+             (s33,1)
+             (s32,1)
+             (s32,0)
+             (s33,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s33,1)
+             (s32,1)
+             (s33,0)
+             (s32,0)
+             (s33,1)
+             (s33,1)
+       s32                                                                                                                                              1.0
+       s33                                                                                                                                              0.8
+       s45                                                                                                                                              0.6
+       s55                                                                                                                                              0.4
+       s98                                                                                                                                              0.2
+             (s55,1)
+             (s45,1)
+             (s55,1)
+             (s55,1)
+             (s55,0)
+             (s45,0)                                                                                                                                    0.0
+             (s98,1)
+             (s98,1)
+             (s98,1)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s32,0)
+             (s33,0)
+             (s32,1)
+             (s33,1)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s32,0)
+             (s33,0)
+             (s32,1)
+             (s33,1)
+             (s33,1)
+             (s32,1)
+             (s32,0)
+             (s33,0)
+             (s33,0)
+             (s32,0)
+             (s33,0)
+             (s32,0)
+             (s33,1)
+             (s32,1)
+             (s33,0)
+             (s32,0)
+             (s33,1)
+             (s33,1)
+             (a) Heatmap (upper: DKT+; lower: DKT) for the predicted probability of correctly answering each skill answered by the student.
+                                                                           DKT+
+       1.0                                                                                                                                               s32
+       0.8                                                                                                                                               s33
+                                                                                                                                                         s45
+       0.6                                                                                                                                               s55
+                                                                                                                                                         s98
+       0.4
+       0.2
+       0.0
+                0                        10                           20                       30                       40
+                                                                           DKT
+       1.0                                                                                                                                               s32
+                                                                                                                                                         s33
+       0.8                                                                                                                                               s45
+                                                                                                                                                         s55
+       0.6                                                                                                                                               s98
+       0.4
+       0.2
+       0.0
+                0                        10                           20                       30                       40
+
+      (b) Line plot (upper: DKT+; lower: DKT) for the predicted probability of correctly answering each skill answered by the student. It aims to show
+      the directional change in prediction of each skill in the DKT/DKT+ model.
+       1.0                                                                                                                                         DKT+, s32
+       0.5                                                                                                                                         DKT, s32
+       0.0
+       1.0     0                        10                       20                       30                       40                              DKT+, s33
+       0.5                                                                                                                                         DKT, s33
+       0.0
+       1.0     0                        10                       20                       30                       40                              DKT+, s45
+       0.5                                                                                                                                         DKT, s45
+       0.0
+       1.0     0                        10                       20                       30                       40                              DKT+, s55
+       0.5                                                                                                                                         DKT, s55
+       0.0
+       1.0     0                        10                       20                       30                       40                              DKT+, s98
+       0.5                                                                                                                                         DKT, s98
+       0.0
+               0                        10                       20                       30                       40
+
+      (c) Line plot for the each skill’s prediction, which is visualized separately with regard to the skill tag. It aims to compare the prediction result of
+      the same skill between DKT and DKT+.
+
+Figure 5: Visualization of a subset of DKT’s output layer using the student’s interaction sequences (id-1) extracted from
+ASSIST2009. The DKT+ model used is trained with λr = 0.10, λw1 = 0.003, λw2 = 3.0. We note that s32 is “Ordering Positive
+Decimals”, s33 is “Ordering Fractions”, s45 is “Subtraction Whole Numbers”, s55 is “Absolute Value”, and s98 is “Equation Solving
+Two or Fewer Steps”.
+REFERENCES                                                       12. Chris Piech, Jonathan Bassen, Jonathan Huang, Surya
+ 1. Hao Cen, Kenneth Koedinger, and Brian Junker. 2006.              Ganguli, Mehran Sahami, Leonidas J Guibas, and Jascha
+    Learning factors analysis – a general method for cognitive       Sohl-Dickstein. 2015. Deep knowledge tracing. In
+    model evaluation and improvement. In Proceedings of the          Advances in Neural Information Processing Systems.
+    8th International Conference in Intelligent Tutoring             505–513.
+    Systems. Springer, Berlin, Heidelberg, 164–175.
+                                                                 13. Lutz Prechelt. 1998. Automatic early stopping using
+ 2. Albert T. Corbett and John R. Anderson. 1995.                    cross validation: quantifying the criteria. Neural
+    Knowledge tracing: modeling the acquisition of                   Networks 11, 4 (June 1998), 761–767.
+    procedural knowledge. User Modeling and User-Adapted
+    Interaction 4, 4 (March 1995), 253–278.                      14. Siddharth Reddy, Igor Labutov, and Thorsten Joachims.
+                                                                     2016. Learning student and content embeddings for
+ 3. José González-Brenes, Yun Huang, and Peter                       personalized lesson Sequence Recommendation. In
+    Brusilovsky. 2014. General features in knowledge tracing         Proceedings of the 3rd ACM Conference on Learning @
+    to model multiple subskills, temporal item response              Scale. ACM, New York, NY, USA, 93–96.
+    theory, and expert knowledge. In Proceedings of the 7th
+    International Conference on Educational Data Mining.         15. Steven Tang, Joshua C. Peterson, and Zachary A. Pardos.
+    84–91.                                                           2016. Modelling student behavior using granular large
+                                                                     scale action data from a MOOC. ArXiv e-prints
+ 4. William J. Hawkins, Neil T. Heffernan, and Ryan S.J.D.           1608.04789 (Augest 2016).
+    Baker. 2014. Learning Bayesian knowledge tracing
+    parameters with a knowledge heuristic and empirical          16. Lisa Wang, Angela Sy, Larry Liu, and Chris Piech. 2017.
+    probabilities. In Proceedings of the 12th International          Learning to represent student knowledge on
+    Conference on Intelligent Tutoring Systems. Springer,            programming exercises using deep learning. In
+    Cham, 150–155.                                                   Proceedings of the 10th International Conference on
+                                                                     Educational Data Mining. 324–329.
+ 5. Tanja Kaeser, Severin Klingler, Alexander G. Schwing,
+    and Markus Gross. 2017. Dynamic Bayesian networks            17. Yutao Wang and Neil T. Heffernan. 2013. Extending
+    for student modeling. IEEE Transactions on Learning              knowledge tracing to allow partial credit: using
+    Technologies 10 (March 2017), 450–462.                           continuous versus binary nodes. In Proceedings of the
+                                                                     13th International Conference on Artificial Intelligence in
+ 6. Mohammad Khajah, Robert V. Lindsey, and Michael C.               Education. Springer, Berlin, Heidelberg, 181–188.
+    Mozer. 2016. How deep is knowledge tracing. In
+    Proceedings of the 9th International Conference on           18. Kevin H. Wilson, Yan Karklin, Bojian Han, and
+    Educational Data Mining. 94–101.                                 Chaitanya Ekanadham. 2016. Back to the basics:
+                                                                     Bayesian extensions of IRT outperform neural networks
+ 7. Zachary C. Lipton, John Berkowitz, and Charles Elkan.            for proficiency estimation. In Proceedings of the 9th
+    2015. A critical review of recurrent neural networks for         International Conference on Educational Data Mining.
+    sequence learning. ArXiv e-prints 1506.00019 (May                539–544.
+    2015).
+                                                                 19. Xiaolu Xiong, Siyuan Zhao, Eric Van Inwegen, and
+ 8. Christopher Olah. 2015. Understanding LSTM networks.             Joseph Beck. 2016. Going deeper with deep knowledge
+    Colah. github. io. (Augest 2015). Retrieved December 10,         tracing. In Proceedings of 9th International Conference
+    2017 from http:                                                  on Educational Data Mining. 545–550.
+    //colah.github.io/posts/2015-08-Understanding-LSTMs/.
+                                                                 20. Michael V. Yudelson, Kenneth R. Koedinger, and
+ 9. Zachary A. Pardos and Neil T. Heffernan. 2010.                   Geoffrey J. Gordon. 2013. Individualized Bayesian
+    Modeling individualization in a Bayesian networks                knowledge tracing models. In Proceedings of the 16th
+    implementation of knowledge tracing. In Proceedings of           International Conference on Artificial Intelligence in
+    the 18th International Conference on User Modeling,              Education, Vol. 7926. Springer, Berlin, Heidelberg,
+    Adaptation, and Personalization, Vol. 6075. Springer,            171–180.
+    Berlin, Heidelberg, 255–266.
+                                                                 21. Jiani Zhang, Xingjian Shi, Irwin King, and Dit-Yan
+10. Zachary A. Pardos and Neil T. Heffernan. 2011.                   Yeung. 2017. Dynamic key-value memory networks for
+    KT-IDEM: introducing item difficulty to the knowledge            knowledge tracing. In Proceedings of the 26th
+    tracing model. In Proceedings of the 19th International          International Conference on World Wide Web.
+    Conference on User Modeling, Adaption and                        International World Wide Web Conferences Steering
+    Personalization, Vol. 6787. Springer, 243–254.                   Committee, Republic and Canton of Geneva, Switzerland,
+11. Philip I. Pavlik, Hao Cen, and Kenneth R. Koedinger.             765–774.
+    2009. Performance factors analysis – a new alternative to    22. Hui Zou and Trevor Hastie. 2004. Regularization and
+    knowledge tracing. In Proceedings of the 14th                    variable selection via the elastic net. Journal of the Royal
+    International Conference on Artificial Intelligence in           Statistical Society: Series B (Statistical Methodology) 67,
+    Education. IOS Press, Amsterdam, Netherlands,                    2 (September 2004), 301–320.
+    531–538.
+

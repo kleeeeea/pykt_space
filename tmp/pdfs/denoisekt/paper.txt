@@ -1,0 +1,680 @@
+                            Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+                                                           Special Track on AI and Social Good
+
+
+
+
+    Denoised Attention and Question-Augmented Representations for Knowledge
+                                     Tracing
+     Jiwei Deng1 , Youheng Bai1 , Mingliang Hou1,2∗ , Teng Guo1 , Zitao Liu1 and Weiqi Luo1
+             1
+               Guangdong Institute of Smart Education, Jinan University, Guangzhou, China
+                                2
+                                  TAL Education Group, Beijing, China
+    dengjiwei@stu.jnu.edu.cn, yhbai@stu2024.jnu.edu.cn, houmingliang@tal.com, {tengguo, liuzitao,
+                                           lwq}@jnu.edu.cn
+
+                                Abstract                                          dents. This is crucial to promoting the development of per-
+                                                                                  sonalized education [Li et al., 2020; Huang et al., 2023].
+        Knowledge tracing (KT) is an essential task in on-                           Currently, mainstream KT models can be broadly di-
+        line education systems. It aims to predict the fu-                        vided into two major categories: deep sequence KT mod-
+        ture performance of students based on their histor-                       els [Medsker et al., 2001] and attention-based KT mod-
+        ical learning interaction data. Despite significant                       els [Vaswani et al., 2017]. The former (e.g., DKT [Piech
+        advancements in attention-based KT models, they                           et al., 2015], DKT-F [Nagatani et al., 2019], KQN [Lee
+        still face some limitations: inaccurate input repre-                      and Yeung, 2019]) utilizes auto-regressive architectures,
+        sentation and excessive student forgetting model-                         such as long short-term memory (LSTM) and gated recur-
+        ing. These limitations often lead to the attention                        rent unit (GRU), to capture students’ interaction informa-
+        noise problem: the model assigns non-negligible                           tion at discrete timestamps, modeling temporal dependen-
+        attention weight to some information that is cog-                         cies through iterative updates of hidden states. The latter
+        nitively irrelevant in nature, thereby generating in-                     (e.g., SAKT [Pandey and Karypis, 2019], SAINT [Choi et al.,
+        terference signals. To address this problem, we                           2020], AKT [Ghosh et al., 2020]) employs multi-head atten-
+        propose a novel KT model, i.e., DenoiseKT. De-                            tion mechanisms to flexibly model long-term dependencies
+        noiseKT effectively models the difficulty of the                          in students’ historical interaction sequences, often resulting
+        questions and utilizes graph neural network to cap-                       in improved predictive accuracy. Compared to deep sequence
+        ture the complex relationship between questions,                          models, attention-based models not only capture long-range
+        thereby refining the representations of input fea-                        dependencies more effectively but offer the advantage of par-
+        tures. Additionally, the denoised attention mech-                         allel training. As a result, they have gradually become the
+        anism introduces a weight factor to reduce the                            dominant KT architecture in recent years.
+        model’s attention weight distribution on irrelevant
+        information. We extensively compare DenoiseKT                                                                               : Derivative, Integral
+                                                                                  Question
+        with 22 state-of-the-art KT models on 4 widely-                                                                             : Derivative, Integral
+        used public datasets. Experimental results show                           Student                                           : Vector, Matrix, Determinant
+        that DenoiseKT can effectively solve the attention                        Response
+                                                                                                                                    : Prime Number
+        noise problem and outperform other models. The
+                                                                                  Attention 0.11   0.15    0.31    0.52             : Derivative, Integral
+        source code of DenoiseKT is available at https:
+        //pykt.org.                                                                                                 Noise            Question-KCs Mapping
+
+
+                                                                                              Figure 1: An illustration of the attention noise.
+1       Introduction
+                                                                                     Although attention-based KT models have shown promis-
+Knowledge tracing (KT) is an important task in online edu-                        ing results, they face the “attention noise” problem in prac-
+cation systems, which focuses on predicting students’ future                      tical applications: the model assigns non-negligible attention
+performance based on their past learning interactions. This                       weights to some information that is essentially cognitively ir-
+is accomplished by modeling students’ knowledge states as                         relevant, thereby generating interference signals. As shown in
+they engage with learning platforms like massive open online                      Figure 1, for the adjacent question, although their knowledge
+courses and intelligent tutoring systems [Piech et al., 2015;                     components (KCs)1 have no intersection, the attention mech-
+Ghosh et al., 2020; Shen et al., 2021; Yin et al., 2023;                          anism may mistakenly overestimate the correlation between
+Gao et al., 2025b]. Effectively addressing the KT task can                        them and assign them non-negligible attention weights, re-
+help teachers better identify students who need further at-                       sulting in some questions that do have cognitive connections
+tention or recommend personalized learning materials to stu-
+                                                                                     1
+                                                                                       A knowledge component (KC) is a generalization of everyday
+    ∗
+        Corresponding author.                                                     terms like concept, principle, fact, or skill.
+
+
+
+                                                                           9619
+                         Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+                                                        Special Track on AI and Social Good
+
+
+being ignored.                                                                     • We propose a denoised attention mechanism that can ef-
+   To effectively model students’ forgetting behavior during                         fectively reduce the model’s attention weight allocation
+cognitive processes, current mainstream attention-based KT                           to irrelevant information.
+models [Ghosh et al., 2020; Im et al., 2023; Yin et al., 2023;
+Li et al., 2024c] often introduce a decay mechanism that                           • We conduct comprehensive quantitative and qualita-
+penalizes attention weights based on the temporal distance                           tive experiments to validate DenoiseKT on four pub-
+between student interaction logs—the greater the distance,                           lic datasets, demonstrating significant performance im-
+the stronger the penalty—to simulate the effect of forgetting.                       provements over existing 22 KT models and its effec-
+However, the decay mechanism, to some extent, introduces                             tiveness in alleviating the attention noise problem.
+noise into the attention. The decay mechanism included in
+the model emphasizes immediate learning behaviors, which                       2     Related Work
+may unintentionally lead to the neglect of learning materi-
+als with long-term cognitive significance [Salthouse et al.,                   2.1    Knowledge Tracing
+2006]. This is similar to the theory of “irrelevant informa-
+tion inhibition” in cognitive psychology, which holds that in                  KT aims to utilize historical learning interaction data from
+the cognitive process, individuals need to actively suppress                   students to predict their responses to future questions. Re-
+irrelevant information and focus on task-related signals [Mc-                  cently, with the advancement of deep learning, this technol-
+Namara and McDaniel, 2004; Li et al., 2023]. In KT task, if                    ogy has been widely applied to KT tasks. We classify exist-
+a model places too much emphasis on short-term learning be-                    ing methods into deep sequence models and attention-based
+haviors while overlooking long-term cognitive development,                     models based on the characteristics of KT models.
+it may struggle to accurately reflect students’ evolving knowl-                   Deep sequence models employ auto-regressive architec-
+edge states. This imbalance can make it difficult to recog-                    tures to capture the chronological order of student interac-
+nize students’ gradual cognitive progress, thereby reducing                    tions. DKT [Piech et al., 2015] introduced LSTM layers to
+the model’s predictive accuracy. In addition, inaccurate in-                   assess students’ knowledge mastery over time, and KQN [Lee
+put representation may also lead to attention noise problem.                   and Yeung, 2019] built upon DKT by incorporating a skill en-
+In educational scenarios, student’s learning behaviors and the                 coder, which combines both student learning behaviors and
+relationships between them are very complex. If the input of                   KCs representations to further refine the predictions made by
+the model cannot accurately reflect these learning behaviors                   DKT. Models like DKVMN [Zhang et al., 2017] leveraged
+and the relationships between them, the attention mechanism                    memory modules for dynamic KT, and ATKT [Guo et al.,
+cannot correctly focus on key information, resulting in atten-                 2021] incorporated adversarial techniques to create pertur-
+tion noise.                                                                    bations that enhance the generalization ability of the model.
+   To address the above attention noise problem, we present                    Other extensions, such as DIMKT [Shen et al., 2022] utilized
+a novel KT model, called DenoiseKT, which focuses on the                       multi-dimensional features to enhance predictions. However,
+following two aspects. On the one hand, we enhance the rep-                    deep sequence models often struggle with vanishing gradients
+resentation by using a graph neural network to capture the                     and have a limited ability to capture long-range dependencies.
+complex relationships between questions, thereby obtaining                        Attention-based models overcome many limitations of
+a refined initial embedding representations. In addition, we                   deep sequence models by utilizing self-attention mechanisms
+also effectively model the difficulty of the questions. By com-                to capture long-term dependencies. SAKT [Pandey and
+bining the refined initial embedding representation and the                    Karypis, 2019] employed a self-attention network to model
+modeling of the difficulty of the questions, we can finely en-                 the relevance between KCs and students’ past interactions,
+code the interaction sequence to reduce the interference of                    while SAINT [Choi et al., 2020] introduced an encoder-
+irrelevant information on the model. On the other hand, we                     decoder architecture to represent sequences of exercise and
+refine the attention mechanism by introducing a weighting                      response embeddings. AKT [Ghosh et al., 2020] imple-
+factor that suppresses the allocation of attention to irrelevant               mented three self-attention modules, using a monotonic at-
+information. Through these two improvements, our model                         tention mechanism to explicitly model the phenomenon of
+can solve the problem of attention noise, thereby improving                    student forgetting over time, and hybrid approaches such
+the prediction performance of the model.                                       as SKVMN [Abdelrahman and Wang, 2019] and DTrans-
+   The main contributions of this paper are summarized as                      former [Yin et al., 2023] combined attention with additional
+follows:                                                                       features to enhance accuracy. These attention-based mod-
+                                                                               els excel in parallelized training and long-range dependency
+   • We present the first solution to the attention noise prob-                awareness, positioning them as the leading choice in modern
+     lem in attention-based KT models, emphasizing the im-                     KT applications.
+     pact of irrelevant information on the distribution of at-
+                                                                                  Despite significant advancements in attention-based KT
+     tention weights.
+                                                                               models, they still face some limitations: inaccurate input rep-
+   • We propose the question-enhanced Rasch module                             resentation and excessive student forgetting modeling. These
+     (QERM) that can effectively capture the complex re-                       limitations often lead to the attention noise problem, where
+     lationship between questions and effectively model the                    the model assigns non-negligible attention weight to some
+     difficulty of questions, thereby making the feature rep-                  information that is cognitively irrelevant in nature, thereby
+     resentation more refined.                                                 generating interference signals.
+
+
+
+                                                                        9620
+                         Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+                                                        Special Track on AI and Social Good
+
+
+2.2    Attention Noise                                                         may involve the same KC, thereby forming direct associa-
+Attention noise refers to the phenomenon that the model                        tions). Furthermore, there may exist deeper high-order rela-
+based on the attention mechanism assigns non-negligible at-                    tionships. For example, while question 1 and question 2 share
+tention weights to segments of the input sequence that are                     a common KC, and question 2 and question 3 also share a KC,
+either irrelevant or less important to the task at hand [Gao et                even though question 1 and question 3 lack direct KC con-
+al., 2025a]. As a result, the model fails to concentrate on the                nections, there may still exist inherent connections between
+most crucial information in the sequence, instead incorporat-                  them through this indirect chain of associations. Traditional
+ing irrelevant information into the decision-making process,                   models typically only handle the direct associations of these
+which reduces the model’s ability to capture the key patterns                  questions and struggle to capture more complex high-order
+needed for accurate predictions or task execution, ultimately                  relationships, which have a significant impact on the repre-
+leading to a decline in model performance.                                     sentation of questions.
+   Attention noise has been widely recognized as a key prob-                      To address the above problem, we utilize a graph convo-
+lem affecting model performance. In recent years, many stud-                   lutional network (GCN) to capture high-order relationships
+ies have tried to solve this problem from different angles.                    among questions to enhance question representations [Liu et
+For example, [Zhao et al., 2019] indirectly alleviates atten-                  al., 2024; Sun et al., 2023; Li et al., 2024a; Li et al., 2024b].
+tion noise by designing sparse attention patterns to focus on                     Given a set of questions Q and KCs C, we construct a
+relevant parts. [Ye et al., 2024] proposed a differential at-                  question-KC bipartite graph G = (V, U), where V = (Q ∪ C)
+tention mechanism to eliminate attention noise by calculating                  and U = {(q, c)|q ∈ Q, c ∈ C} denote the sets of nodes and
+the attention score as the difference between two independent                  edges, respectively. We then use GCN combined with the
+softmax attention maps.                                                        question-KC bipartite graph to enhance question representa-
+   However, these methods are not applicable to KT tasks,                      tions. The latent representation eqt of question qt is computed
+as attention noise is influenced by the modeling of student                    as follows:
+forgetting, often resulting in the noise being assigned more                                       Wq(1) = AWq(0) W + b
+weight than the relevant information.
+                                                                                                          eqt = Wq(1) · oqt
+3     The Framework of DenoiseKT                                               where A is the adjacency matrix of G. Wq ∈ Rd×nq is the
+3.1    Problem Statement                                                       embedding matrix of question. o∗ is the original one-hot vec-
+Given an arbitrary question q∗ , KT’s objective is to predict                  tor of ∗. W ∈ Rd×d and b ∈ Rd are learnable linear trans-
+the probability of a student answering q∗ correctly based on                   formation operations.
+the student’s previous interaction data. More specifically, the                   Additionally, even for questions that cover the same KC,
+previous interaction sequence of each student is represented                   there may be significant differences in difficulty. For instance,
+as S = {< q1 , C1 , r1 >, < q2 , C2 , r2 >, ..., < qt , Ct , rt >              two questions that both assess fraction addition: one is a sim-
+}, where qt denotes the question answered by the student at                    ple addition with the same denominator, while the other in-
+time t, Ct represents the associated KC set to qt and rt is the                volves more complex operations with different denominators,
+binary response indicating whether the student’s response to                   students’ performance on these two questions will demon-
+the question is correct (rt = 1) or incorrect (rt = 0) . We would              strate a significant difference. If we judge students’ perfor-
+like to estimate the probability of the student answering the                  mance solely based on whether they have mastered a certain
+question qt+1 correctly.                                                       type of question, while ignoring the difficulty of the question,
+                                                                               the model may make incorrect inferences. Inspired by the
+3.2    Framework Overview                                                      classic Rasch model [Rasch, 1993], which models individual
+                                                                               ability and item difficulty separately, we incorporate question
+DenoiseKT’s overall framework is depicted in Figure 2. In
+                                                                               difficulty into the question representation. After obtaining the
+this section, we provide a detailed introduction to DenoiseKT,
+                                                                               latent representation eqt of question qt , we enhance it by in-
+which consists of three components: (1) interaction represen-
+                                                                               troducing a difficulty parameter to better capture the under-
+tation module that uses graph-enhanced question representa-
+                                                                               lying properties of the question. More specifically, the t-th
+tion and incorporates question difficulty into the representa-
+                                                                               representations of question and interaction are represented as
+tion; (2) denoised attention module that effectively solves the
+                                                                               follows:
+problem of attention noise to better extract knowledge state
+                                                                                                                       |Ct |
+from students’ past learning history; (3) prediction module                                                       1 X
+that uses a two-layer fully connected network to make pre-                                dqt = Wd · oqt ; ect =             W c · oc t j
+                                                                                                                 |Ct | j=1
+diction.
+3.3    Interaction Representation Module                                                                   e r t = W r · or t
+Effectively representing questions in interaction sequences is
+crucial to the success of the KT model. However, there are of-                          xt = eqt ⊕ dqt ⊙ ect ; yt = eqt ⊕ ert
+ten complex and multi-level relationships between questions,                   where dqt represents the question qt difficulty. ect and ert
+making it difficult to comprehensively capture and model                       denote the latent representations of KC set Ct and student re-
+them using traditional methods alone. These relationships are                  sponse rt on question qt . |Ct | is the total number of KCs as-
+not merely superficial adjacent connections (some questions                    sociated with question qt . Wd ∈ Rd×nq , Wc ∈ Rd×nc and
+
+
+
+                                                                        9621
+                               Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+                                                              Special Track on AI and Social Good
+
+
+
+   Original Interaction Data
+                                                                          Linear
+
+
+
+
+                                      Question-enhanced Rasch
+                                                                                      MatMul           Mask    SoftMax
+
+
+
+
+                                                                                                                                                               Fully Connected Neural Network
+                                                                          Linear
+                                                                                                                           MatMul
+
+                                                                          Linear
+
+
+
+
+                                                                             BF
+
+
+
+
+         Interaction Representation                                                 Denoised Attention                                            Prediction
+
+
+                                                                Figure 2: The overview of the proposed DenoiseKT framework.
+
+
+Wr ∈ Rd×2 represent the difficulty embedding matrix, the                                              vant information. Specifically, the retrieved knowledge state
+KC embedding matrix, and the response embedding matrix.                                               ht+1 at the (t + 1)-th timestamp is determined using the fol-
+⊕ and ⊙ represent the addition operators and element-wise                                             lowing formula:
+product respectively.
+   The above is a detailed overview of the QERM we pro-                                                 Q = L(xt+1 ); K = L(x1 , . . . , xt ); V = L(y1 , . . . , yt )
+posed. This module can not only characterize the complex
+relationships between questions, but also reasonably model                                                                                 QKT
+the difficulty differences of questions so as to represent ques-                                                   ht+1 = sof tmax(BF · √ ) · V
+                                                                                                                                               d
+tions more accurately.
+                                                                                                      where L(·), KT and d denote the linear operation, the trans-
+3.4    Denoised Attention Mechanism                                                                   pose of K and the dimension of K respectively. BF is the
+In the research field of KT and educational measurement, stu-                                         weight factor that is calculated based on the similarity and
+dents’ cognitive behaviors are closely linked to the questions                                        distance between questions in the interaction history. Specif-
+they answer. When answering questions, students tend to fo-                                           ically, each element of BF is computed as follows:
+cus on those questions that are most similar in content and                                                                   simij = |i − j| · 1{qi ≃qj }
+closest in time to the current question, and answer based on
+this information. This process conforms to the laws of hu-
+                                                                                                                                 1 + β simij ,
+                                                                                                                                
+man cognition, because the human brain typically processes                                                                                        simij ̸= 0
+                                                                                                                         bfij =
+information through associations, especially when confronted                                                                     1,               otherwise
+with new problems, it automatically recalls similar situations                                        where bfij denotes the element at the (i)-th row and (j)-th
+and experiences.                                                                                      column of BF. 1{qi ≃qj } means it is 1 when qi and qj share
+   In real cognitive processes, the factors that have the most                                        the same KC, and 0 otherwise. β is a hyperparameter greater
+significant impact on a student’s current cognitive behavior                                          than 0 and less than 1.
+are often those historical questions that are most relevant and
+closest to the current question. However, existing attention-                                         3.5     Prediction Module
+based models KT models tend to assign non-negligible at-                                              To predict the outcomes of students over questions, we em-
+tention scores to questions that are not closely related to the                                       ploy a two-layer fully connected neural network following
+current question, due to inaccurate input representations and                                         the attention layers. The attention layers capture a compre-
+the decay mechanisms introduced to account for student for-                                           hensive representation of the student’s behavioral sequence.
+getting. These results in unnecessary interference and pre-                                           After passing through the feed-forward network in the at-
+vents the model from focusing on truly relevant information.                                          tention module, this representation, denoted as ht+1 , func-
+These non-negligible irrelevant attention scores are referred                                         tions as a summary of the knowledge state. This is sub-
+to as attention noise. This noise affects the model’s ability to                                      sequently merged with the contextualized embedding of the
+accurately track and analyze the student’s learning process,                                          current question xt+1 , creating the input for the prediction
+thereby reducing the model’s overall effectiveness. To solve                                          layer. The prediction layer calculates the probability of a cor-
+the attention noise problem, we design a denoised attention                                           rect response r̂t+1 using the following formulation:
+mechanism that multiplies the attention scores by weight fac-
+tor. This enables the model to effectively focus on truly rele-                                         r̂t+1 = σ(η(W2 · η(W1 · [ht+1 ; xt+1 ] + b1 ) + b2 ))
+
+
+
+                                                                                               9622
+                           Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+                                                          Special Track on AI and Social Good
+
+
+where σ(·), η(·) denote Sigmoid and ReLU functions. W1 ∈                                 textual content and analysis, as well as timestamps of
+Rd×2d , W2 ∈ Rd×d , b1 ∈ Rd , b2 ∈ Rd are learnable pa-                                  student responses. In terms of the number of KCs and
+rameters.                                                                                the richness of contextual information, this dataset is
+  We optimize the prediction function by minimizing the bi-                              currently the largest in the mathematics domain.
+nary cross-entropy loss between the ground-truth response
+                                                                                    • EdNet5 : This dataset is collected over two years by
+rt+1 and the prediction probability r̂t+1 as follows:
+                                                                                      Santa, an AI tutoring service with over 780,000 users
+            X                                                                         in Korea. Given the large volume, we randomly select
+    L=−          (rt+1 log r̂t+1 + (1 − rt+1 ) log(1 − r̂t+1 ))                       a subset of student records for model evaluation. The
+             t                                                                        dataset includes 597,042 interactions, 4,999 students,
+                                                                                      11,901 questions, and 188 KCs, with each question as-
+This predictive framework allows the model to incorpo-                                sociated with up to 7 KCs.
+rate information from both previous interactions and current
+contexts, ensuring precise estimates of students’ knowledge                         To ensure reproducibility in our experiments, we rigor-
+states and response probabilities.                                               ously follow the data pre-processing steps suggested in [Liu
+                                                                                 et al., 2022b]. We filter out student sequences that are shorter
+4       Experiment                                                               than 3 interactions. Data statistics are summarized in Table 1.
+To evaluate the performance of our proposed DenoiseKT                               Dataset        # of interactions   # of students   # questions   # of KCs
+framework, we conduct extensive experiments to address the                        ASSIST2009           346,860             4,217         17,737         123
+following research questions:                                                       NIPS34            1,399,470            4,918           948           57
+                                                                                   XES3G5M            5,549,635           18,066          7,652         865
+    • RQ1: Can DenoiseKT outperform existing KT models                              EdNet              597,042             4,999         11,901         188
+      in terms of prediction performance?
+                                                                                            Table 1: Data statistics of 4 widely used datasets.
+    • RQ2: How does each component of DenoiseKT con-
+      tribute to its overall effectiveness?
+    • RQ3: Can DenoiseKT effectively solve the attention
+      noise problem?                                                             4.2      Baselines
+                                                                                 To assess the performance of DenoiseKT, we compared it
+4.1      Datasets                                                                with 22 state-of-the-art KT models as follows: DKT [Piech
+In this paper, we evaluated the performance of our model on                      et al., 2015], DKT+ [Yeung and Yeung, 2018], DKT-
+four widely used publicly available datasets.                                    F [Nagatani et al., 2019], KQN [Lee and Yeung, 2019],
+                                                                                 DKVMN [Zhang et al., 2017], ATKT [Guo et al., 2021],
+    • ASSISTments2009 (ASSIST2009)2 : This dataset is                            GKT [Nakagawa et al., 2019], SAKT [Pandey and Karypis,
+      collected from the ASSISTment online tutoring plat-                        2019], SAINT [Choi et al., 2020], AKT [Ghosh et al., 2020],
+      form during the 2009-2010 school year and focuses on                       SKVMN [Abdelrahman and Wang, 2019], HawkesKT [Wang
+      math exercises. It has been a standard benchmark for                       et al., 2021], Deep-IRT [Yeung, 2019], DIMKT [Shen et
+      KT methods over the past decade. The dataset includes                      al., 2022], qDKT [Sonkar et al., 2020], AT-DKT [Liu et
+      346,860 interactions, 4,217 students, 17,737 questions,                    al., 2023], simpleKT [Liu et al., 2022a], QIKT [Chen et al.,
+      and 123 KCs, with the maximum number of KCs in a                           2023], RKT [Pandey and Srivastava, 2020], FoLiBiKT [Im et
+      single question being 4.                                                   al., 2023], DTransformer [Yin et al., 2023], extraKT [Li et
+    • NeurIPS2020 Education Challenge (NIPS34)3 : This                           al., 2024c].
+      dataset is provided by NeurIPS 2020 Education Chal-                           It is important to note that the baseline models selected
+      lenge. It contains students’ responses to mathematics                      in this paper are mostly derived from articles published in
+      questions from Eedi. The dataset includes data from                        top venues on AI/ML or education. Furthermore, when
+      Task 3 and Task 4, with 1,399,470 interactions, 4,918                      comparing these baseline models, the implementations were
+      students, 948 questions, 57 KCs, and the maximum                           based on the authors’ publicly available code and repro-
+      number of KCs in a single question is 2.                                   duced following the configuration settings in pyKT [Liu et
+    • XES3G5M4 : This large-scale dataset derived from a                         al., 2022b]. All methods underwent optimal hyperparame-
+      Chinese online mathematics learning platform, docu-                        ter tuning using Weights&Bias6 , ensuring the fairness of the
+      menting the learning performance of third-grade stu-                       comparison results. Moreover, the hyper-parameter tuning
+      dents in mathematics. The dataset contains 5,549,635                       tool Weights&Biases utilizes Bayesian search to automati-
+      interactions involving 18,066 students across 7,652 math                   cally identify the optimal parameter combinations. For each
+      questions. It includes rich auxiliary information,such as                  model, the tool explores approximately hundreds of combi-
+      865 KCs with hierarchical relationships, question types,                   nations during the tuning process. This automated approach
+                                                                                 ensures that all methods achieve optimal parameters on each
+    2
+      https://sites.google.com/site/assistmentsdata/home/2009-2010-              dataset.
+assistment-data/skill-builder-data-2009-2010
+    3                                                                               5
+      https://eedi.com/projects/neurips-education-challenge                             https://github.com/riiid/ednet
+    4                                                                               6
+      https://github.com/ai4ed/XES3G5M                                                  https://wandb.ai/site/
+
+
+
+
+                                                                          9623
+                            Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+                                                           Special Track on AI and Social Good
+
+
+                                                AUC                                                                     ACC
+      Model
+                  ASSIST2009          NIPS34         XES3G5M              EdNet           ASSIST2009          NIPS34         XES3G5M             EdNet
+     DKT        0.7541 ± 0.0011   0.7689 ± 0.0002 0.7852 ± 0.0006    0.6133 ± 0.0006    0.7244 ± 0.0014   0.7032 ± 0.0004 0.8173 ± 0.0002   0.6462 ± 0.0028
+    DKT+        0.7547 ± 0.0017   0.7696 ± 0.0002 0.7861 ± 0.0002    0.6189 ± 0.0012    0.7248 ± 0.0009   0.7039 ± 0.0004 0.8178 ± 0.0001   0.6571 ± 0.0019
+    DKT-F              -          0.7733 ± 0.0003 0.7940 ± 0.0006    0.6168 ± 0.0019           -          0.7076 ± 0.0002 0.8209 ± 0.0003   0.6402 ± 0.0021
+     KQN        0.7477 ± 0.0011   0.7684 ± 0.0003 0.7793 ± 0.0006    0.6111 ± 0.0022    0.7228 ± 0.0009   0.7028 ± 0.0001 0.8152 ± 0.0002   0.6422 ± 0.0043
+   DKVMN        0.7473 ± 0.0006   0.7673 ± 0.0004 0.7792 ± 0.0004    0.6158 ± 0.0022    0.7199 ± 0.0010   0.7016 ± 0.0005 0.8155 ± 0.0001   0.6444 ± 0.0030
+    ATKT        0.7470 ± 0.0008   0.7665 ± 0.0001 0.7783 ± 0.0004    0.6065 ± 0.0003    0.7208 ± 0.0009   0.7013 ± 0.0002 0.8145 ± 0.0002   0.6369 ± 0.0009
+     GKT        0.7424 ± 0.0021   0.7689 ± 0.0024 0.7727 ± 0.0006    0.6223 ± 0.0017    0.7153 ± 0.0032   0.7014 ± 0.0028 0.8135 ± 0.0004   0.6625 ± 0.0064
+    SAKT        0.7246 ± 0.0017   0.7517 ± 0.0005 0.7693 ± 0.0008    0.6072 ± 0.0018    0.7063 ± 0.0018   0.6879 ± 0.0004 0.8124 ± 0.0002   0.6391 ± 0.0041
+    SAINT       0.6958 ± 0.0023   0.7873 ± 0.0007 0.8074 ± 0.0007    0.6614 ± 0.0019    0.6936 ± 0.0034   0.7180 ± 0.0006 0.8177 ± 0.0006   0.6522 ± 0.0024
+     AKT        0.7853 ± 0.0017   0.8033 ± 0.0003 0.8207 ± 0.0008    0.6721 ± 0.0022    0.7392 ± 0.0021   0.7323 ± 0.0005 0.8273 ± 0.0007   0.6655 ± 0.0042
+   SKVMN        0.7332 ± 0.0009   0.7513 ± 0.0005 0.7514 ± 0.0005    0.6182 ± 0.0114    0.7156 ± 0.0012   0.6885 ± 0.0005 0.8075 ± 0.0003   0.6555 ± 0.0152
+  HawkesKT      0.7224 ± 0.0006   0.7767 ± 0.0010 0.7921 ± 0.0007    0.6837 ± 0.0016    0.7046 ± 0.0008   0.7110 ± 0.0007 0.8188 ± 0.0003   0.6917 ± 0.0013
+  Deep-IRT      0.7465 ± 0.0006   0.7672 ± 0.0006 0.7785 ± 0.0005    0.6173 ± 0.0008    0.7195 ± 0.0004   0.7014 ± 0.0008 0.8150 ± 0.0002   0.6457 ± 0.0033
+   DIMKT        0.7717 ± 0.0011   0.8030 ± 0.0002 0.8220 ± 0.0002    0.6748 ± 0.0030    0.7354 ± 0.0019   0.7312 ± 0.0005 0.8291 ± 0.0006   0.6699 ± 0.0038
+    qDKT        0.7016 ± 0.0049   0.7995 ± 0.0008 0.8225 ± 0.0002    0.6987 ± 0.0010    0.6787 ± 0.0039   0.7299 ± 0.0007 0.8301 ± 0.0000   0.6922 ± 0.0004
+   AT-DKT       0.7555 ± 0.0005   0.7816 ± 0.0002 0.7932 ± 0.0004    0.6249 ± 0.0020    0.7250 ± 0.0007   0.7146 ± 0.0002 0.8198 ± 0.0004   0.6512 ± 0.0039
+  simpleKT      0.7744 ± 0.0018   0.8035 ± 0.0000 0.8163 ± 0.0006    0.6599 ± 0.0027    0.7320 ± 0.0012   0.7328 ± 0.0001 0.8246 ± 0.0005   0.6557 ± 0.0029
+    QIKT        0.7878 ± 0.0024   0.8044 ± 0.0005 0.8222 ± 0.0006    0.7271 ± 0.0012    0.7381 ± 0.0014   0.7333 ± 0.0005 0.8300 ± 0.0005   0.7082 ± 0.0016
+     RKT        0.7628 ± 0.0070   0.7966 ± 0.0011 0.8224 ± 0.0007    0.7226 ± 0.0005    0.7289 ± 0.0062   0.7264 ± 0.0010 0.8294 ± 0.0004   0.7045 ± 0.0022
+  FoLiBiKT      0.7838 ± 0.0013   0.8033 ± 0.0002 0.8214 ± 0.0007    0.6747 ± 0.0036    0.7393 ± 0.0010   0.7323 ± 0.0001 0.8271 ± 0.0006   0.6676 ± 0.0028
+ DTransformer   0.7725 ± 0.0025   0.7944 ± 0.0003 0.8144 ± 0.0006    0.6736 ± 0.0028    0.7295 ± 0.0017   0.7295 ± 0.0007 0.8248 ± 0.0004   0.6665 ± 0.0017
+   extraKT      0.7824 ± 0.0013   0.8045 ± 0.0003 0.8200 ± 0.0008    0.6730 ± 0.0025    0.7355 ± 0.0017   0.7340 ± 0.0004 0.8263 ± 0.0010   0.6668 ± 0.0016
+  DenoiseKT     0.7898 ± 0.0013   0.8046 ± 0.0002 0.8282 ± 0.0004    0.7353 ± 0.0012    0.7427 ± 0.0007   0.7330 ± 0.0007 0.8319 ± 0.0003   0.7131 ± 0.0020
+
+Table 2: Performance comparisons in terms of AUC and ACC on four datasets. The best performance is highlighted in bold, and the second-
+best performance is underlined.
+
+
+4.3     Experimental Setting                                                      the NIPS34 dataset) , with scores of 0.7427 (ASSIST2009),
+In order to fairly evaluate the performance of KT models, all                     0.7330 (NIPS34), 0.8319 (XES3G5M), and 0.7131 (EdNet).
+models are trained and evaluated on student interaction se-                       These results indicate the effectiveness of DenoiseKT; (2)
+quences of fixed length 200. For each dataset, we use 20% of                      compared to all attention-based KT models, i.e., SAKT,
+all student sequences for the test set, and perform standard 5-                   SAINT, AKT and simpleKT, our model has the best perfor-
+fold cross validation on the rest 80% of all student sequences.                   mance on all four datasets. This indicates our denoised atten-
+We use the Adam optimizer to train our model. The maxi-                           tion mechanism and QERM allow attention-based KT models
+mum of the training epochs is set to 200, and we choose to                        to effectively deal with the attention noise problem that im-
+use early stopping when the performance is not improved af-                       proves the predictive performance.
+ter 10 epochs. The embedding dimension, the hidden state                             Although the AUC improvements shown in Table 2 may
+dimension, the two dimension of the feed-forward neural net-                      appear modest, with increases of less than 1% on some
+work layers are set to [64, 128], the learning rate, random                       datasets, these gains are significant, especially when evalu-
+seed, dropout rate and hyper-parameter β are set to [1e-3, 2e-                    ated with a context window size of 200. Recent benchmark-
+3, 1e-4], [42, 3407], [0.1, 0.2, 0.3, 0.4, 0.5] and [0.01, 0.1,                   ing studies have highlighted that many reported advance-
+0.3, 0.5, 0.7, 0.9, 0.99] respectively, the number of blocks                      ments in KT models are unreliable, often stemming from
+and attention heads are set to [1, 2, 4] and [4, 8]. Our model                    flawed evaluation methods, with overall prediction perfor-
+is implemented in PyTorch [Imambi et al., 2021] and trained                       mance having improved by only 3.5% since 2015. In contrast,
+on a cluster of Linux servers with the NVIDIA RTX 3090                            our study strictly adhered to the rigorous evaluation proto-
+GPU device. Aligned with previous work [Liu et al., 2022b;                        col proposed by pyKT [Liu et al., 2022b] and conducted an
+Ghosh et al., 2020; Liu et al., 2022a], we use area under                         exhaustive hyper-parameter search for all baseline models to
+the curve (AUC) as the main evaluation metric and accuracy                        ensure reliable and meaningful comparisons.
+(ACC) as the secondary evaluation metric.                                         Ablation Study (RQ2)
+                                                                                  In order to verify the effectiveness of each design compo-
+4.4     Results                                                                   nent in the DenoiseKT model, we constructed three variants
+Overall Performance (RQ1)                                                         of the DenoiseKT model for ablation experiments, as shown
+Table 2 shows the overall performance of all models in the                        in Figures 3 and 4. Specifically, for variant DenoiseKT w/o
+four datasets. We calculate the mean and standard deviation                       QERM, we removed the QERM in the question representa-
+of the AUC and ACC across 5 folds. According to Table 2,                          tion part, that is to say we no longer use GCN to capture the
+we have the following observations: (1) on the main evalu-                        complex relationship between questions to enhance question
+ation metrics, our proposed model DenoiseKT outperforms                           representation and also cancel the effective modeling of prob-
+all state-of-the-art models. Compared to the second-best per-                     lem difficulty. We use the standard method commonly used
+forming model, the DenoiseKT model performs 0.20% better                          in KT research to represent the question. For variant De-
+on ASSIST2009, 0.01% better on NIPS34, 0.57% better on                            noiseKT w/o BF, we removed the weight factor BF used to
+XES3G5M, and 0.82% better on EdNet. On the secondary                              solve the noise problem in the denoised attention mechanism.
+evaluation metrics, our proposed model DenoiseKT outper-                          For variant DenoiseKT w/o QERM & BF, we removed both
+forms almost all baselines (except QIKT and extraKT on                            the QERM and the weight factor BF.
+
+
+
+                                                                           9624
+                           Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+                                                          Special Track on AI and Social Good
+
+
+           DenoiseKT   w/o QERM                  DenoiseKT     w/o QERM                                         DenoiseKT                  w/o QERM                                   DenoiseKT   w/o QERM
+           w/o BF      w/o QERM & BF             w/o BF        w/o QERM & BF                                    w/o BF                     w/o QERM & BF                              w/o BF      w/o QERM & BF
+  0.792                                 0.805                                        0.829                                                                  0.737
+  0.789                                 0.804                                        0.828                                                                  0.736
+  0.786                                 0.803                                        0.827                                                                  0.735
+  0.783                                 0.802                                        0.826                                                                  0.734
+  0.780                                 0.801                                        0.825                                                                  0.733
+AUC
+  0.777                             AUC 0.800                                AUC     0.824                                                              AUC 0.732
+  0.774                                 0.799                                        0.823                                                                  0.731
+  0.771                                 0.798                                        0.822                                                                  0.730
+  0.768                                 0.797                                        0.821                                                                  0.729
+  0.765                                 0.796                                        0.820                                                                  0.728
+                   Model                                  Model                                                                          Model                                                Model
+          (a) ASSIST2009.                         (b) NIPS34.                                                 (c) XES3G5M.                                                             (d) EdNet.
+
+                            Figure 3: Comparison of AUC values for DenoiseKT and its variants across datasets.
+
+           DenoiseKT   w/o QERM                   DenoiseKT    w/o QERM                                         DenoiseKT                   w/o QERM
+                                                                                                                                                                                      DenoiseKT   w/o QERM
+           w/o BF      w/o QERM & BF                                                                                                                                                  w/o BF      w/o QERM & BF
+  0.744                                 0.7340    w/o BF       w/o QERM & BF
+                                                                                    0.8325                      w/o BF                      w/o QERM & BF   0.716
+  0.742                                 0.7335                                      0.8320                                                                  0.715
+  0.740                                 0.7330                                      0.8315                                                                  0.714
+  0.738                                 0.7325                                      0.8310                                                                  0.713
+  0.736                                                                                                                                                     0.712
+ACC                                                                                                                                                     ACC
+                                        0.7320                                      0.8305
+  0.734                             ACC 0.7315                               ACC    0.8300                                                                  0.711
+  0.732                                 0.7310                                      0.8295                                                                  0.710
+  0.730                                 0.7305                                      0.8290                                                                  0.709
+  0.728                                 0.7300                                      0.8285                                                                  0.708
+  0.726                                 0.7295                                      0.8280                                                                  0.707
+                   Model                                   Model                                                                         Model                                                Model
+          (a) ASSIST2009.                         (b) NIPS34.                                                 (c) XES3G5M.                                                             (d) EdNet.
+
+                            Figure 4: Comparison of ACC values for DenoiseKT and its variants across datasets.
+
+
+   It can be observed that compared with the complete De-                        demonstrates that our model can efficiently tackle the issue
+noiseKT model, all other ablation variants perform worse on                      of attention noise.
+the four datasets. Specifically, (1) the variant without QERM
+(DenoiseKT w/o QERM) had different degrees of perfor-                                                                                Dot-Product Attention                          Denoised Attention      1.0
+
+
+
+
+                                                                                Question ID -> KCs ID
+                                                                                                        0 -> [26]                    0                                          0
+mance degradation on all datasets, among which the per-                                                 1 -> [26]                    1                                          1
+
+
+
+
+                                                                                                                    Question Index                             Question Index
+                                                                                                        2 -> [26]                                                                                           0.8
+formance of ASSIST2009 was the most obvious, with AUC                                                   3 -> [26]
+                                                                                                                                     2                                          2
+                                                                                                                                     3                                          3
+down by 1.3%. This emphasizes the importance of capturing                                               4 -> [26]                    4                                          4
+                                                                                                                                                                                                            0.6
+
+the complex relationship between problems and effectively                                               5 -> [60, 54]                5                                          5
+                                                                                                                                                                                                            0.4
+                                                                                                        6 -> [60, 52]                6                                          6
+modeling the difficulty of problems; (2) the variant without                                            7 -> [60, 53]                7                                          7
+                                                                                                                                                                                                            0.2
+BF (DenoiseKT w/o BF) also leads to a decrease in perfor-                                               8 -> [60, 54]                8                                          8
+                                                                                                        9 -> [26]                    9                                          9
+mance, which shows that reducing the generation of atten-                                                                                0 1 2 3 4 5 6 7 8 9                        0 1 2 3 4 5 6 7 8 9
+                                                                                                                                                                                                            0.0
+tion noise is crucial for accurate prediction; (3) compared                                                                                Question Index                             Question Index
+with other variants, the variant without QERM and BF (De-
+noiseKT w/o QERM & BF) shows the worst results.                                  Figure 5: Visualization of both dot-product attention and denoised
+                                                                                 attention. The question index represents questions answered by a
+   Overall, the absence of any component will lead to a de-
+                                                                                 specific student, and index 0 represents the first question.
+crease in model performance, which shows that each module
+in the DenoiseKT model plays an important role in the KT
+task.
+Visualization (RQ3)                                                              5                         Conclusion
+To intuitively demonstrate the difference between regular dot-
+product attention and denoised attention, we visualize the at-                   This paper presents DenoiseKT, a KT model designed to ad-
+tention scores of both regular dot-product attention and de-                     dress attention noise by introducing two key components: a
+noised attention, as shown in Figure 5. From Figure 5, we                        QERM for refined question representation, and a denoised
+have the following observations: our denoised attention can                      attention mechanism to suppress irrelevant signals. Experi-
+capture the information of similar problems well, while reg-                     ments on four public datasets confirm that both components
+ular dot product attention cannot capture the information of                     contribute to improved prediction accuracy. Beyond perfor-
+similar problems well. For example, when predicting the                          mance gains, DenoiseKT offers a generalizable and cogni-
+9th question, denoised attention focuses on information from                     tively grounded framework for calibrating attention in educa-
+questions 4, 3, 2, and 1, while regular dot-product attention                    tional modeling, paving the way for more interpretable and
+emphasizes information from questions 8, 7, 6 and 5. This                        reliable KT systems.
+
+
+
+                                                                          9625
+                        Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+                                                       Special Track on AI and Social Good
+
+
+Acknowledgements                                                              [Im et al., 2023] Yoonjin Im, Eunseong Choi, Heejin Kook,
+                                                                                 and Jongwuk Lee. Forgetting-aware linear bias for atten-
+This work was supported in part by National Key R&D Pro-                         tive knowledge tracing. In Proceedings of the 32nd ACM
+gram of China, under Grant No. 2023YFC3341200; in part                           International Conference on Information and Knowledge
+by Key Laboratory of Smart Education of Guangdong Higher                         Management, pages 3958–3962, 2023.
+Education Institutes, Jinan University (2022LSYS003) and in
+part by Beijing Municipal Science and Technology Project                      [Imambi et al., 2021] Sagar Imambi, Kolla Bhanu Prakash,
+under Grant No. Z241100001324011.                                                and GR Kanagachidambaresan. Pytorch. Programming
+                                                                                 with TensorFlow: Solution for Edge Computing Applica-
+                                                                                 tions, pages 87–104, 2021.
+References                                                                    [Lee and Yeung, 2019] Jinseok Lee and Dit-Yan Yeung.
+[Abdelrahman and Wang, 2019] Ghodai Abdelrahman and                              Knowledge query network for knproceedings of the 26th
+  Qing Wang. Knowledge tracing with sequential key-value                         international conference on world wide webowledge trac-
+  memory networks. In Proceedings of the 42nd Interna-                           ing: How knowledge interacts with skills. In Proceedings
+  tional ACM SIGIR Conference on Research and Develop-                           of the 9th International Conference on Learning Analytics
+  ment in Information Retrieval, pages 175–184, 2019.                            and Knowledge, pages 491–500, 2019.
+[Chen et al., 2023] Jiahao Chen, Zitao Liu, Shuyan Huang,                     [Li et al., 2020] Hang Li, Wenbiao Ding, and Zitao Liu.
+  Qiongqiong Liu, and Weiqi Luo. Improving interpretabil-                        Identifying at-risk k-12 students in multimodal online en-
+  ity of deep sequential knowledge tracing models with                           vironments: A machine learning approach. International
+  question-centric cognitive representations. In Proceed-                        Educational Data Mining Society, 2020.
+  ings of the AAAI Conference on Artificial Intelligence, vol-                [Li et al., 2023] Qing Li, Xin Yuan, Sannyuya Liu, Lu Gao,
+  ume 37, pages 14196–14204, 2023.                                               Tianyu Wei, Xiaoxuan Shen, and Jianwen Sun. A genetic
+[Choi et al., 2020] Youngduck Choi, Youngnam Lee,                                causal explainer for deep knowledge tracing. IEEE Trans-
+                                                                                 actions on Evolutionary Computation, 2023.
+  Junghyun Cho, Jineon Baek, Byungsoo Kim, Yeongmin
+  Cha, Dongmin Shin, Chan Bae, and Jaewe Heo. Towards                         [Li et al., 2024a] Ming Li, Zhao Li, Changqin Huang, Yun-
+  an appropriate query, key, and value computation for                           liang Jiang, and Xindong Wu. Edugraph: Learning path-
+  knowledge tracing. In Proceedings of the 7th ACM                               based hypergraph neural networks for mooc course recom-
+  Conference on Learning at Scale, pages 341–344, 2020.                          mendation. IEEE Transactions on Big Data, 2024.
+[Gao et al., 2025a] Weibo Gao, Qi Liu, Rui Li, Yuze Zhao,                     [Li et al., 2024b] Ming Li, Siwei Zhou, Yuting Chen,
+  Hao Wang, Linan Yue, Fangzhou Yao, and Zheng Zhang.                            Changqin Huang, and Yunliang Jiang. Educross: Dual
+  Denoising programming knowledge tracing with a code                            adversarial bipartite hypergraph learning for cross-modal
+  graph-based tuning adaptor. In Proceedings of the 31st                         retrieval in multimodal educational slides. Information Fu-
+  ACM SIGKDD Conference on Knowledge Discovery and                               sion, 109:102428, 2024.
+  Data Mining V. 1, pages 354–365, 2025.                                      [Li et al., 2024c] Xueyi Li, Youheng Bai, Ying Zheng, Min-
+                                                                                 gliang Hou, Bojun Zhan, Yaying Huang, Zitao Liu, Boyu
+[Gao et al., 2025b] Weibo Gao, Qi Liu, Linan Yue,                                Gao, and Weiqi Luo. Extending context window of atten-
+  Fangzhou Yao, Zhenya Huang, Zheng Zhang, and Rui                               tion based knowledge tracing models via length extrapola-
+  Lv. Boxcd: Leveraging contrastive probabilistic box                            tion. In Proceedings of the 27th European Conference on
+  embedding for effective and efficient learner modeling. In                     Artificial Intelligence, 2024.
+  Proceedings of the ACM on Web Conference 2025, pages
+  3660–3671, 2025.                                                            [Liu et al., 2022a] Zitao Liu, Qiongqiong Liu, Jiahao Chen,
+                                                                                 Shuyan Huang, and Weiqi Luo. simpleKT: A simple but
+[Ghosh et al., 2020] Aritra Ghosh, Neil Heffernan, and An-                       tough-to-beat baseline for knowledge tracing. In Proceed-
+  drew S Lan. Context-aware attentive knowledge tracing. In                      ings of the 11th International Conference on Learning
+  Proceedings of the 26th ACM SIGKDD International Con-                          Representations, 2022.
+  ference on Knowledge Discovery and Data Mining, pages                       [Liu et al., 2022b] Zitao Liu, Qiongqiong Liu, Jiahao Chen,
+  2330–2339, 2020.                                                               Shuyan Huang, Jiliang Tang, and Weiqi Luo. pyKT: a
+[Guo et al., 2021] Xiaopeng Guo, Zhijie Huang, Jie Gao,                          python library to benchmark deep learning based knowl-
+  Mingyu Shang, Maojing Shu, and Jun Sun. Enhancing                              edge tracing models. Advances in Neural Information Pro-
+  knowledge tracing via adversarial training. In Proceedings                     cessing Systems, 35:18542–18555, 2022.
+  of the 29th ACM International Conference on Multimedia,                     [Liu et al., 2023] Zitao Liu, Qiongqiong Liu, Jiahao Chen,
+  pages 367–375, 2021.                                                           Shuyan Huang, Boyu Gao, Weiqi Luo, and Jian Weng.
+[Huang et al., 2023] Shuyan Huang, Zitao Liu, Xiangyu                            Enhancing deep knowledge tracing with auxiliary tasks.
+  Zhao, Weiqi Luo, and Jian Weng. Towards robust knowl-                          In Proceedings of the 32th International Conference on
+  edge tracing models via k-sparse attention. In Proceed-                        World Wide Web, pages 4178–4187, 2023.
+  ings of the 46th international ACM SIGIR conference on                      [Liu et al., 2024] Shengyingjie Liu, Zongkai Yang, San-
+  research and development in information retrieval, pages                       nyuya Liu, Ruxia Liang, Jianwen Sun, Qing Li, and Xi-
+  2441–2445, 2023.                                                               aoxuan Shen. Hyperbolic embedding of discrete evolution
+
+
+
+                                                                       9626
+                       Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI-25)
+                                                      Special Track on AI and Social Good
+
+
+   graphs for intelligent tutoring systems. Expert Systems                   [Sonkar et al., 2020] Shashank Sonkar, Andrew E Waters,
+   with Applications, 241:122451, 2024.                                         Andrew S Lan, Phillip J Grimaldi, and Richard G Bara-
+[McNamara and McDaniel, 2004] Danielle S McNamara                               niuk. qDKT: Question-centric deep knowledge tracing. In
+   and Mark A McDaniel. Suppressing irrelevant infor-                           Proceedings of the 13th International Conference on Edu-
+   mation: Knowledge activation or inhibition? Journal                          cational Data Mining, 2020.
+   of Experimental Psychology: Learning, Memory, and                         [Sun et al., 2023] Jianwen Sun, Shangheng Du, Zhi Liu,
+   Cognition, 30(2):465, 2004.                                                  Fenghua Yu, Sannyuya Liu, and Xiaoxuan Shen. Weighted
+[Medsker et al., 2001] Larry R Medsker, Lakhmi Jain, et al.                     heterogeneous graph-based three-view contrastive learn-
+   Recurrent neural networks. Design and Applications,                          ing for knowledge tracing in personalized e-learning sys-
+   5(64-67):2, 2001.                                                            tems. IEEE Transactions on Consumer Electronics,
+[Nagatani et al., 2019] Koki Nagatani,                                          70(1):2838–2847, 2023.
+                                             Qian Zhang,
+   Masahiro Sato, Yan-Ying Chen, Francine Chen, and                          [Vaswani et al., 2017] Ashish Vaswani, Noam Shazeer, Niki
+   Tomoko Ohkuma. Augmenting knowledge tracing by                               Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez,
+   considering forgetting behavior. In Proceedings of the                       Łukasz Kaiser, and Illia Polosukhin. Attention is all you
+   28th International Conference on World Wide Web, pages                       need. Advances in Neural Information Processing Sys-
+   3101–3107, 2019.                                                             tems, 30, 2017.
+[Nakagawa et al., 2019] Hiromi Nakagawa, Yusuke Iwa-                         [Wang et al., 2021] Chenyang Wang, Weizhi Ma, Min
+   sawa, and Yutaka Matsuo. Graph-based knowledge trac-                         Zhang, Chuancheng Lv, Fengyuan Wan, Huijie Lin, Tao-
+   ing: modeling student proficiency using graph neural net-                    ran Tang, Yiqun Liu, and Shaoping Ma. Temporal cross-
+   work. In IEEE/WIC/ACM International Conference on                            effects in knowledge tracing. In Proceedings of the 14th
+   Web Intelligence, pages 156–163, 2019.                                       ACM International Conference on Web Search and Data
+[Pandey and Karypis, 2019] Shalini Pandey and George                            Mining, pages 517–525, 2021.
+   Karypis. A self-attentive model for knowledge tracing. In                 [Ye et al., 2024] Tianzhu Ye, Li Dong, Yuqing Xia, Yutao
+   12th International Conference on Educational Data Min-                       Sun, Yi Zhu, Gao Huang, and Furu Wei. Differential trans-
+   ing, pages 384–389, 2019.                                                    former. arXiv preprint arXiv:2410.05258, 2024.
+[Pandey and Srivastava, 2020] Shalini Pandey and Jaideep                     [Yeung and Yeung, 2018] Chun-Kit Yeung and Dit-Yan Ye-
+   Srivastava. RKT: relation-aware self-attention for knowl-                    ung. Addressing two problems in deep knowledge tracing
+   edge tracing. In Proceedings of the 29th ACM Interna-                        via prediction-consistent regularization. In Proceedings of
+   tional Conference on Information and Knowledge Man-                          the 15th Annual ACM Conference on Learning at Scale,
+   agement, pages 1205–1214, 2020.                                              pages 1–10, 2018.
+[Piech et al., 2015] Chris Piech, Jonathan Bassen, Jonathan                  [Yeung, 2019] Chun-Kit Yeung. Deep-IRT: Make deep
+   Huang, Surya Ganguli, Mehran Sahami, Leonidas J                              learning based knowledge tracing explainable using item
+   Guibas, and Jascha Sohl-Dickstein. Deep knowledge trac-                      response theory. arXiv e-prints, pages arXiv–1904, 2019.
+   ing. Advances in Neural Information Processing Systems,                   [Yin et al., 2023] Yu Yin, Le Dai, Zhenya Huang,
+   28, 2015.
+                                                                                Shuanghong Shen, Fei Wang, Qi Liu, Enhong Chen,
+[Rasch, 1993] Georg Rasch. Probabilistic models for some                        and Xin Li. Tracing knowledge instead of patterns:
+   intelligence and attainment tests. 1993.                                     Stable knowledge tracing with diagnostic transformer.
+[Salthouse et al., 2006] Timothy A Salthouse, John R Nes-                       In Proceedings of the 32th International Conference on
+   selroade, and Diane E Berish. Short-term variability in                      World Wide Web, pages 855–864, 2023.
+   cognitive performance and the calibration of longitudinal                 [Zhang et al., 2017] Jiani Zhang, Xingjian Shi, Irwin King,
+   change. The Journals of Gerontology Series B: Psycho-                        and Dit-Yan Yeung. Dynamic key-value memory networks
+   logical Sciences and Social Sciences, 61(3):P144–P151,                       for knowledge tracing. In Proceedings of the 26th Inter-
+   2006.                                                                        national Conference on World Wide Web, pages 765–774,
+[Shen et al., 2021] Shuanghong Shen, Qi Liu, Enhong Chen,                       2017.
+   Zhenya Huang, Wei Huang, Yu Yin, Yu Su, and Shi-                          [Zhao et al., 2019] Guangxiang Zhao, Junyang Lin, Zhiyuan
+   jin Wang. Learning process-consistent knowledge trac-                        Zhang, Xuancheng Ren, Qi Su, and Xu Sun. Explicit
+   ing. In Proceedings of the 27th ACM SIGKDD Conference                        sparse transformer: Concentrated attention through ex-
+   on Knowledge Discovery and Data Mining, pages 1452–                          plicit selection, 2019.
+   1460, 2021.
+[Shen et al., 2022] Shuanghong Shen, Zhenya Huang,
+   Qi Liu, Yu Su, Shijin Wang, and Enhong Chen. Assessing
+   student’s dynamic knowledge state by exploring the
+   question difficulty effect. In Proceedings of the 45th
+   International ACM SIGIR Conference on Research and
+   Development in Information Retrieval, pages 427–437,
+   2022.
+
+
+
+                                                                      9627
+

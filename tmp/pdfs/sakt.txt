@@ -1,0 +1,431 @@
+                                                       A Self-Attentive model for Knowledge Tracing
+
+                                                                  Shalini Pandey                                          George Karypis
+                                                              University of Minnesota                                 University of Minnesota
+                                                            Twin Cities, MN 55455, USA                              Twin Cities, MN 55455, USA
+                                                              pande103@umn.edu                                          karypis@umn.edu
+
+
+
+                                         ABSTRACT
+
+
+
+
+arXiv:1907.06837v1 [cs.LG] 16 Jul 2019
+                                         Knowledge tracing is the task of modeling each student’s
+                                         mastery of knowledge concepts (KCs) as (s)he engages with
+                                         a sequence of learning activities. Each student’s knowledge
+                                         is modeled by estimating the performance of the student
+                                         on the learning activities. It is an important research area
+                                         for providing a personalized learning platform to students.      Figure 1: Left subfigure shows the sequence of exercises that the
+                                         In recent years, methods based on Recurrent Neural Net-          student attempts and the right subfigure shows the knowledge
+                                                                                                          concepts to which each of the exercises belong.
+                                         works (RNN) such as Deep Knowledge Tracing (DKT) and
+                                         Dynamic Key-Value Memory Network (DKVMN) outper-
+                                         formed all the traditional methods because of their ability
+                                         to capture complex representation of human learning. How-        alized learning platforms, knowledge tracing (KT) is consid-
+                                         ever, these methods face the issue of not generalizing well      ered to be an important task and is defined as the task of
+                                         while dealing with sparse data which is the case with real-      tracing a student’s knowledge state, which represents his/her
+                                         world data as students interact with few KCs. In order to        mastery level of KCs, based on his/her past learning ac-
+                                         address this issue, we develop an approach that identifies       tivities. The KT task can be formalized as a supervised
+                                         the KCs from the student’s past activities that are rele-        sequence learning task - given student’s past exercise inter-
+                                         vant to the given KC and predicts his/her mastery based          actions X = (x1 , x2 , . . . , xt ), predict some aspect of his/her
+                                         on the relatively few KCs that it picked. Since predictions      next interaction xt+1 . On the question-answering platform,
+                                         are made based on relatively few past activities, it handles     the interactions are represented as xt = (et , rt ), where et is
+                                         the data sparsity problem better than the methods based          the exercise that the student attempts at timestamp t and
+                                         on RNN. For identifying the relevance between the KCs,           rt is the correctness of the student’s answer. KT aims to
+                                         we propose a self-attention based approach, Self Attentive       predict whether the student will be able to answer the next
+                                         Knowledge Tracing (SAKT). Extensive experimentation on           exercise correctly, i.e., predict p(rt+1 = 1|et+1 , X).
+                                         a variety of real-world dataset shows that our model out-
+                                         performs the state-of-the-art models for knowledge tracing,      Recently deep learning models such as Deep Knowledge Trac-
+                                         improving AUC by 4.43% on average.                               ing (DKT) [6] and its variant [10] used Recurrent Neural
+                                                                                                          Network (RNN) to model a student’s knowledge state in
+                                                                                                          one summarized hidden vector. Dynamic Key-value mem-
+                                         Keywords                                                         ory network (DKVMN) [11] exploited Memory Augmented
+                                         Knowledge Tracing, Massive Open Online Courses, Self-            Neural Network [7] for KT. Using two matrices, key and
+                                         attention, sequential recommendation                             value, it learns the correlation between the exercises and
+                                                                                                          the underlying KC and student’s knowledge state, respec-
+                                         1.   INTRODUCTION                                                tively. The DKT model faces the issue of its parameters
+                                         The availability of massive dataset of students’ learning tra-   being non-interpretable [4]. DKVMN is more interpretable
+                                         jectories about their knowledge concepts (KCs), where a KC       than DKT as it explicitly maintains a KC representation
+                                         can be an exercise, a skill or a concept, has attracted data     matrix (key) and a knowledge state representation matrix
+                                         miners to develop tools for predicting students’ performance     (value). However, since all these deep learning models are
+                                         and giving proper feedback [8]. For developing such person-      based on RNNs, they face the issue of not generalizing while
+                                                                                                          dealing with sparse data [3].
+
+                                                                                                          In this paper, we propose to use a purely attention mech-
+                                                                                                          anism based method, transformer [9]. In the KT task, the
+                                                                                                          skills that a student builds while going through the sequence
+                                                                                                          of learning activities, are related to each other and the per-
+                                                                                                          formance on a particular exercise is dependent on his per-
+                                                                                                          formance on the past exercises related to that exercise. For
+                                                                                                          example, in figure 1, for a student to solve an exercise on
+                                                                                                          “Quadratic equation” (exercise 5) which belongs to the knowl-
+edge concept “Equations”, he needs to know how to find                                    Table 1: Notations
+“square roots” (exercise 3) and “linear equations” (exercise      Notations       Description
+4). SAKT, proposed in this paper first identifies relevant
+                                                                  N               total number of students
+KCs from the past interactions and then predicts student’s
+                                                                  E               total number of exercises
+performance based on his/her performance on those KCs.
+                                                                  X               Interaction sequence of a student: (x1 , x2 , . . . , xt )
+For predicting student’s performance on an exercise, we used
+                                                                  xi              ith exercise-answer pair of a student
+exercises as KCs. As we show later, SAKT assigns weights
+                                                                  n               maximum length of sequence
+to the previously answered exercises, while predicting the
+                                                                  d               latent vector dimensionality
+performance of the student on a particular exercise. The
+                                                                  e               Sequence of exercises solved by the student
+proposed SAKT method significantly outperforms the state-
+                                                                  M               Interaction embedding matrix
+of-the-art KT methods gaining a performance improvement
+                                                                  P               Positional embedding matrix
+of 4.43% on the AUC, on an average across all datasets.
+                                                                  E               Exercise lookup matrix
+Furthermore, the main component (self-attention) of SAKT
+                                                                  M̂              Past interactions embedding
+is suitable for parallelism; thus, making our model order of
+magnitude faster than RNN based models.                           Ê              Exercise embedding
+
+
+
+
+                                                                 problem. It is convenient to consider the model with inputs
+                                                                 x1 , x2 , . . . , xt−1 and the exercise sequence with one position
+                                                                 ahead, e2 , e3 , . . . , et and the output being the correctness
+                                                                 of the response to exercises r2 , r3 , . . . , rt . The interaction
+                                                                 tuple xt = (et , rt ) is presented to the model as a number
+                                                                 yt = et + rt × E, where E is the total number of exercises.
+                                                                 Thus, the total values that an element in the interaction
+                                                                 sequence can take is 2E, while elements in the exercise se-
+                                                                 quence can take E possible values.
+
+                                                                 We now describe the different layers of our architecture.
+
+                                                                 Embedding layer: We transform the obtained input se-
+                                                                 quence y = (y1 , y2 , . . . , yt ) into s = (s1 , s2 , . . . , sn ), where
+                                                                 n is the maximum length that the model can handle. Since
+                                                                 the model can work with inputs of fixed length sequence, if
+(a) Network of SAKT. At each timestamp the attention             the sequence length, t is less than n, we repetitively add a
+weights are estimated for each of the previous element
+only. Keys, Values and Queries are extracted from the            padding of question-answer pair to the left of the sequence.
+embedding layer shown below. When jth element is query           However, if t is greater than n, we partition the sequence
+and ith element is key, attention weight is ai,j .               into subsequences of length n. Specifically, when t is greater
+                                                                 than n, yt is partitioned into t/n subsequences each of length
+                                                                 n. All these subsequences serve as input to the model.
+                                                                 We train an Interaction embedding matrix, M ∈ R2E×d ,
+                                                                 where d is the latent dimension. This matrix is used to ob-
+                                                                 tain an embedding, Msi for each element, si in the sequence.
+                                                                 Similarly, we train exercise embedding matrix, E ∈ RE×d
+                                                                 such that each exercise in the set ei is embedded in the ei th
+                                                                 row.
+                                                                 Position Encoding: Position Encoding is the layer in the
+                                                                 self-attention neural network which is used for encoding the
+(b) Embedding layer embeds the current exercise that the         position so that like convolution network and recurrent neu-
+student is attempting and his past interactions. At every        ral network, we can encode the order of the sequence. This
+time stamp t+1, the current question et+1 is embedded in         layer is particularly important in knowledge tracing problem
+the query space using Exercise embedding and elements            because a student’s knowledge state evolves gradually and
+of past interactions xt is embedded in the key and value
+space using the Interaction embedding.                           steadily with time. The knowledge state at a particular time
+                                                                 instance should not show wavy transitions [10]. In order to
+     Figure 2: Diagram showing the architecture of SAKT.         incorporate this we use a parameter, position embedding,
+                                                                 P ∈ Rn×d which is learned while training. The ith row of
+2.   PROPOSED METHOD                                             position embedding matrix, Pi is then added to the interac-
+Our model predicts whether a student will be able to an-         tion embedding vector of the ith element of the interaction
+swer the next exercise et+1 based on his previous interac-       sequence.
+tion sequence X = x1 , x2 , . . . , xt . As shown in figure 2,
+we can transform the problem into a sequential modeling          The output from the embedding layer is embedded interac-
+tion input matrix, M̂ and embedded exercise matrix, Ê:            a specific concept to strengthen that concept. Hence, resid-
+                                                               ual connection can help propagating the embeddings of the
+                    Ms1 + P1            Es1                        recently solved exercises to the final layer making it easier
+                   Ms2 + P2         E                          for model to leverage the low layer information. A residual
+                                         
+            M̂ =             , Ê =  s2  .          (1)        connection is applied after both self-attention and feed for-
+                      ...            ... 
+                                                               ward layer.
+                     Msn + Pn              Esn
+                                                                   Layer normalization: In [1], it was shown that normal-
+                                                                   izing inputs across features can help in stabilizing and ac-
+ Self-attention layer: In our model, we use the scaled dot-        celerating neural networks. We used layer normalization in
+product attention mechanism [9]. This layer finds the rel-         our architecture for the same purpose.Layer normalization
+ative weight corresponding to each of the previously solved        is also applied at both the self-attention and feed forward
+exercise for predicting the correctness of the current exercise.   layer.
+We obtain query and key-value pairs using the following            Prediction layer:
+equations:                                                         Finally, each row of the matrix Fi obtained above is passed
+              Q = ÊWQ , K = M̂WK , V = M̂WV ,              (2)    through the fully connected network with Sigmoid activation
+                                                                   to predict the performance of the student.
+          Q      K    V     d×d
+where W , W , W ∈ R             are the query, key and value
+projection matrices, respectively, which linearly project the                        pi = Sigmoid(Fi w + b),                 (6)
+respective vectors to different space [9]. The relevance of        where pi is a scalar and represents the probability of student
+each of the previous interactions with the current exercise        providing correct response to exercise ei , Fi is the ith row
+is determined using the attention weights. For finding the         of F and Sigmoid(z) = 1/(1 + e−z )
+attention weights we use the scaled dot product [9], defined
+as:                                                                Network Training: The objective of training is to min-
+                                          QKT                      imize the negative log likelihood of the observed sequence
+                                               
+         Attention(Q, K, V) = softmax √           V.      (3)      of student responses under the model. The parameters are
+                                             d
+                                                                   learned by minimizing the cross entropy loss between pt and
+Mutiple heads: In order to jointly attend to information from      rt .
+different representative subspaces, we linearly project the                 L = −Σt (rt log(pt ) + (1 − rt ) log(1 − pt ))   (7)
+queries, keys and values h times using different projection
+matrices.
+                                                                   3. EXPERIMENTAL SETTINGS
+   Multihead(M̂, Ê) = Concat(head1 , . . . , headh )WO ,   (4)
+                                                                   3.1 Datasets
+where headi = Attention(ÊWQ           K       V         O         To evaluate our model, we used four real-world datasets and
+                                i , M̂Wi , M̂Wi ) and W ∈
+Rhd×d .                                                            one synthetic dataset.
+Causality:                                                            • Synthetic1 : This dataset is obtained by simulating
+In our model, we should consider only first t interactions              4000 virtual students’ answering trajectories. Each
+when predicting the result of the (t + 1)st exercise. There-            student answers the same sequence of 50 exercises,
+fore, for a query Qi , the keys Kj such that j > i should not           which are drawn from 5 virtual concepts with vary-
+be considered. We use, causality layer to mask the weights              ing difficulty level.
+learned from a future interaction key,
+                                                                      • ASSISTment 20092 (ASSIST2009): This dataset is
+Feed Forward layer:                                                     provided by ASSISTment online tutoring platform and
+The self-attention layer described above results in weighted            is widely used for KT tasks. We conducted our ex-
+sum of values, Vi of the previous interactions. However                 periments on the updated ”skill-builder” dataset. The
+the rows of the matrix obtained from the multihead layer,               dataset is sparse as the density of this dataset is 0.06,
+S = Multihead(M̂, Ê) is still a linear combination of the              shown in Table 2.
+values, Vi of the previous interactions. To incorporate non-
+                                                                      • ASSISTment 20153 (ASSIST2015):ASSISTment 2015
+linearity in the model and consider the interactions between
+                                                                        contains students’ responses on 100 skills. There are
+different latent dimensions, we use a feed forward network.
+                                                                        19,917 students and 708,631 interactions. Although
+   F = FFN(S) = ReLU(SW(1) + b(1) )W(2) + b(2) ,            (5)         the number of records in this dataset is more than
+                                                                        ASSISTment 2009, the average number of records per
+where W(1) ∈ Rd×d , W(2) ∈ Rd×d , b(1) ∈ Rd , b(2) ∈ Rd are             student is smaller because the number of students is
+parameters learned during training.                                     larger. This dataset is the most sparse of all the avail-
+                                                                        able datasets, with a density of 0.05.
+Residual Connections: The residual connection [2] are              1
+                                                                     https://github.com/chrispiech/DeepKnowledgeTracing/tree/
+used to propagate the lower layer features to the higher lay-      master/data/synthetic
+ers. Hence, if low layer features are important for predic-        2
+                                                                     https://sites.google.com/site/assistmentsdata/home/assistment-
+tion, the residual connection will help in propagating them        2009-2010-data/skill-builder-data-2009-2010
+to the final layers where the predictions are performed. In        3
+                                                                     https://sites.google.com/site/assistmentsdata/home/2015-
+the context of KT, students attempt exercises belonging to         assistments-skill-builder-data
+                   Table 2: Dataset Statistics                                    Table 3: Student Performance prediction comparison.
+
+                           #Skill                    #Unique                     Datasets                              AUC
+     Datasets    #Users             #Interactions                  Density
+                            tags                    Interactions                                DKT      DKT+       DKVMN         SAKT     Gain%
+
+Synthetic-5         4000       50           200K           200K          1       Synthetic       0.823      0.824         0.822   0.832       0.97
+ASSIST2009          4417      124           328K            35K       0.06       ASSIST2009      0.820      0.822         0.816   0.848       3.16
+ASSIST2015         19917      100           709K           102K       0.05       ASSIST2015      0.736      0.737         0.727   0.854      15.87
+ASSIST-Chall         686      102           943K            57K       0.81       ASSISTChall    0.734       0.728         0.689   0.734       0.00
+STATICS              333     1223           190K           129K       0.31       STATICS         0.815      0.835         0.814   0.853       2.16
+                                                                                 Average         0.786      0.789         0.773   0.824       4.43
+The columns corresponding to #Users, #Skill tags and #Interactions
+represent the number of students, total number of exercise tags and the      1
+                                                                                 Bold numbers are the best performance.
+number of records, respectively. The column Density represents the den-      2
+                                                                                 The reported results are obtained by the best hyperparameter selec-
+sity of each dataset (i.e., Density = #Unique Interactions/(#Users ×         tion for each dataset individually.
+#Skill tags)).
+
+
+
+      • ASSISTment Challenge (ASSISTChall): This data is
+                                                                             4.      RESULTS AND DISCUSSION
+                                                                             Student Performance Prediction: Table 3 shows the
+        obtained from ASSISTment 2017 competition4 . It is
+                                                                             performance comparison of SAKT with the current state-
+        the richest dataset in terms of the number of interac-
+                                                                             of-the-art methods. On the Synthetic dataset, SAKT per-
+        tions with 942,816 interactions, 686 students and 102
+                                                                             forms better than the competing approaches, achieving an
+        skills. This dataset is the most dense dataset of all the
+                                                                             AUC of 0.832 compared to 0.824 by DKT+. Even though
+        available datasets because its density is 0.81.
+                                                                             Synthetic is the most dense dataset, SAKT outperforms
+      • STATICS2011 (STATICS): This dataset contains the                     RNN based methods because of the methodology used for
+        interaction from an engineering statics course with 189,927          generating Synthetic. For this dataset, each individual ex-
+        interactions, 333 students and 1223 skill tags. We                   ercise is derived from only one concept. The probability
+        adopted the processed data from [11]. It is also a dense             of a student answering an exercise from this dataset cor-
+        dataset with a density of 0.31.                                      rectly is determined using Item Response Theory [8] as,
+                                                                                                        1−c
+                                                                             p(correct|α, β) = c + 1+exp(β−α)   , where c denotes the prob-
+The complete statistical information for all the datasets can
+be found in Table 2.                                                         ability of guessing it correctly, α and β are randomly chosen
+                                                                             numbers to indicate the concept ability and exercise diffi-
+                                                                             culty, respectively. Thus, in this dataset, the exercises be-
+3.2      Evaluation Methodology                                              longing to the same concept are strongly correlated. SAKT,
+Metrics: The prediction task is considered in a binary clas-                 unlike other benchmarks, directly attempts to identify ex-
+sification setting i.e., answering an exercise correctly or not.             ercises belonging to the same concept and hence performs
+Hence, we compare the performance using the Area Under                       better than other methods. On ASSIST2009, SAKT per-
+Curve (AUC) metric.                                                          forms better than competing approaches, gaining a perfor-
+Approaches: We compare our model against the state-of-                       mance improvement of 3.16% over the second best perform-
+the-art KT methods, DKT [6], DKT+ [10], and DKVMN [11].                      ing method. For ASSIST2015 dataset, SAKT shows an im-
+These methods are described in the introduction.                             pressive improvement of 15.87%. We attribute this gain to
+Model Training and parameter selection: We trained                           the fact that attention mechanism leveraged by SAKT can
+the model with 80% of the dataset and test it on the remain-                 learn and generalize well even when the dataset is sparse,
+ing. For all the methods, we tried the hidden state dimen-                   which is the case with ASSIST2015 as its density is the least
+sion d = {50, 100, 150, 200}. For the competing approaches,                  among the other datasets. For STATICS2011, our method
+we used the same hyperparameters as reported in their re-                    achieves a performance improvement of 2.16% compared to
+spective papers. For initialization of weights and optimiza-                 DKT+. For ASSISTChall, our method performs at par with
+tion, we used a similar procedure as [10]. We implemented                    DKT. This can be attributed to the fact that ASSISTChall
+SAKT with Tensorflow and used ADAM [5] optimizer with                        is the most dense dataset of all the real-world datasets.
+learning rate of 0.001. We used a batch size of 256 for the                  Attention weights visualization: Visualizing the atten-
+ASSISTChall dataset and 128 for the others. For datasets                     tion weights between the elements of past interactions (which
+with a larger number of records, e.g., ASSISTChall and AS-                   serve as keys) and the exercise that the student is going to
+SIST2015, we used a dropout rate of 0.2, while for the re-                   solve next (which serves as query) can help in understand-
+maining datasets, we used a dropout rate of 0.2. We set the                  ing which exercises in the past interactions are relevant to
+maximum length of the sequence, n as roughly proportional                    the query exercise. With this motivation, we compute the
+to the average exercise tags per student. For ASSISTChall                    sum of attention weights of each exercise pair (e1, e2) across
+and STATICS dataset we use n = 500, for the ASSIST2009                       all the sequences where e1 serves as query and interaction
+n = 100 and 50 , for the synthetic and ASSIST2015 datasets                   with exercise e2 serves as key. We then normalize the atten-
+n is set to 50.                                                              tion weights so that the sum of the weights for each query
+                                                                             is one. This results in a relevance matrix in which each
+                                                                             element, (e1, e2) represents the influence of e2 on e1. We
+                                                                             perform our analysis on Synthetic because this dataset was
+4
+    https://sites.google.com/view/assistmentsdatamining                      generated with known hidden concepts and hence the ground
+                     Table 4: Example of attention weights for some sequences in ASSIST2009 dataset.
+
+     Exercise tag                                                  Past Interactions
+ Scale Factor             (Probability of Two Distinct Events,1): 0.000001, (Circle Graph, 1): 0.0001, (Circle Graph,1):0.001,
+                          (Division Fractions, 0): 0.99
+ Ordering integers        (Intercepts,0): 0.21, (Ordering positive decimals,1): 0.611, (Multiplication whole numbers,1): 0.09,
+                          (Proportion,1):0.033
+ Rate                     (Interior Angles Figures, 0):0.005, (Algebraic Simplification,0) : 0.009, (Rate,0):0.5, (Interior Angles
+                          Figures, 0):0.1, (Algebraic Simplification,0) : 0.12
+
+   • The columns corresponding to Exercise tag refers to the query (i.e., the exercise for which we have to predict the
+     student’s performance) and Past Interactions refers to the sequence of interactions that has been observed for that
+     student, respectively.
+   • red colored elements in the right column represent the most important element among the past interaction elements.
+
+
+                                                                    truth regarding the relevance of different exercises are known
+                                                                    to us. Figure 3a shows the heatmap corresponding to the
+                                                                    relevance matrix of exercises in Synthetic. For Synthetic,
+                                                                    all the sequences consist of all exercise tags in the same se-
+                                                                    quence starting from 1 to 50.
+                                                                    In order to build the influence graph between the exercise
+                                                                    tags, as shown in Figure 3b, we use the relevance matrix.
+                                                                    Firstly, we draw out the first exercise in the sequence that
+                                                                    belongs to each hidden concept, and visit each row of the
+                                                                    relevance matrix, and connect the exercise corresponding
+                                                                    to that row to the first two exercises ranked based on edge
+                                                                    weight, which is proportional to the attention weights be-
+                                                                    tween the pair of exercises. We can see that the based on
+                                                                    the attention weights, we are able to achieve the perfect
+                                                                    clustering of the exercise tags based on the hidden concepts
+                                                                    from which they are derived. An interesting observation is
+                                                                    that two exercises which occur far apart in the sequence but
+                                                                    belonging to the same concept can be identified by SAKT.
+                                                                    For example, as shown Figure 3b a query on exercise 22 as-
+                                                                    signed most weight to the key with exercise 5 even when
+                                                                    they occur far apart in the sequence.
+                                                                    Two exercises which are relevant to each other tend to have
+                                                                    high attention weights as the performance on one of them
+                                                                    impacts the performance on the other. Additionally, in the
+                                                                    real-world scenario, the exercises which occur close in the
+(a) Heatmap depicting the attention weights between each pair sequence tend to belong to the same concept. Thus, we ex-
+of exercises. Note that, the weight assigned for pair (i, j), where
+j > i is always zero because all the sequences consists of exer- pect that the attention weights biased towards the exercises
+cises in the same order from                                        that occur recently in the interaction sequence. To illustrate
+                                                                    this, we manually analyzed ASSIST2009 dataset to visual-
+                                                                    ize the attention weights for some selected samples. Table 4
+                                                                    shows some of the exercises along with the past interactions
+                                                                    and attention weights assigned to each interaction.
+                                                                    Ablation Study: Table 4 shows the performance of default
+                                                                    SAKT architecture and all the variants on all the datasets
+                                                                    (with d = 200).
+                                                                    No Positional Encoding (PE): In this variant of the default
+                                                                    architecture, we removed the positional encoding. As a re-
+                                                                    sult, the attention weights assigned for predicting the per-
+                                                                    formance of student on a particular exercise depends only
+                                                                    on the interaction embedding, without being affected by its
+                                                                    position in the sequence. In case of ASSIST2009 and AS-
+                                                                    SIST2015, the dataset is sparse and hence the impact of
+(b) Graph depicting the relevance between exercises. The
+relevance is determined by the attention weights learned            removal of PE is not much pronounced as is the case with
+between the exercises using SAKT. We observe a perfect              the dense dataset such as ASSISTChall and STATICS.
+clustering of latent concepts.                                      No Residual Connection (RC):RCs shows the importance of
+   Figure 3: Visualizing attention weight of Synthetic dataset.     low level features i.e., the interaction embedding while mak-
+                                                                    ing the prediction. Since our architecture is not very deep,
+                  Table 5: Ablation Study
+
+                         ASSIST ASSIST ASSIST
+Architecture Synthetic                               STATICS
+                           2009     2015     Chall
+
+Default         0.832     0.848     0.854    0.734     0.853
+No PE            0.827     0.842    0.849    0.715     0.832
+No RC            0.823     0.847    0.857    0.709     0.834
+No Dropout       0.832     0.845    0.851    0.711     0.840
+Single head      0.823     0.828    0.845    0.709     0.851
+0 block          0.826     0.837    0.822    0.634     0.819
+2 blocks         0.827     0.840    0.853    0.724     0.845
+
+
+
+the RC do not contribute much to the performance of the                Figure 4: Training Efficiency on ASSIST2009 dataset.
+model. In fact removal of residual connection gives better
+performance than default for the ASSIST2015 dataset.
+No Dropout: Dropout is used in neural network to regular-              arXiv:1607.06450 (2016).
+ize the model so that it can generalize better. Overfitting        [2] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian
+of the model is more effective for dataset with less number            Sun. 2016. Deep residual learning for image
+of records compared to the number of parameters of model.              recognition. In Proceedings of the IEEE conference on
+As a result, role of dropout is more effective for ASSIST2009          computer vision and pattern recognition. 770–778.
+dataset and STATICS dataset.                                       [3] Wang-Cheng Kang and Julian McAuley. 2018.
+Single head: Instead of using 5 heads as is the case in de-            Self-Attentive Sequential Recommendation. CoRR
+fault architecture, we tried a variant of using only one head.         abs/1808.09781 (2018).
+Multiple heads help in capturing the attention weights in dif-     [4] Mohammad Khajah, Robert V Lindsey, and
+ferent subspaces. Using single head consistently drops the             Michael C Mozer. 2016. How deep is knowledge
+performance of SAKT on all the datasets.                               tracing? arXiv preprint arXiv:1604.02416 (2016).
+No block: When no self-attention block is used the predic-         [5] Diederik P Kingma and Jimmy Ba. 2014. Adam: A
+tion of the next exercise depends only on the last interaction.        method for stochastic optimization. arXiv preprint
+It can be seen that without attention block the performance            arXiv:1412.6980 (2014).
+is significantly worse than that of default architecture.
+                                                                   [6] Chris Piech, Jonathan Bassen, Jonathan Huang,
+2 Blocks: Increasing the number of blocks of self-attention
+                                                                       Surya Ganguli, Mehran Sahami, Leonidas J Guibas,
+increases the number of parameters of the model. However,
+                                                                       and Jascha Sohl-Dickstein. 2015. Deep knowledge
+in our case this increase of parameters does not prove to
+                                                                       tracing. In Advances in Neural Information Processing
+be useful in improving the performance. The reason being
+                                                                       Systems. 505–513.
+an important aspect of prediction of performance of student
+                                                                   [7] Adam Santoro, Sergey Bartunov, Matthew Botvinick,
+at an exercise is dependent on his performance on the past
+                                                                       Daan Wierstra, and Timothy Lillicrap. 2016. One-shot
+relevant exercises. Adding another block of self-attention
+                                                                       learning with memory-augmented neural networks.
+makes the model more complex.
+                                                                       arXiv preprint arXiv:1605.06065 (2016).
+Training efficiency: Figure 4 demonstrates the efficiency          [8] John Self. 1990. Theoretical foundations for intelligent
+of various methods based on their run times on GPU during              tutoring systems. Journal of Artificial Intelligence in
+the training phase. Comparing the computational efficiency,            Education 1, 4 (1990), 3–14.
+SAKT only spends 1.4 seconds in one epoch which is 46.42           [9] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob
+less than the time taken by DKT+ (65 seconds/epoch), 32                Uszkoreit, Llion Jones, Aidan N Gomez, Lukasz
+times less than DKT (45 seconds/epoch) and 17.33 times                 Kaiser, and Illia Polosukhin. 2017. Attention is all you
+less than DKVMN (26 seconds/epoch). We conducted the                   need. In Advances in Neural Information Processing
+experiments on a single GPU of type NVIDIA Titan V.                    Systems. 5998–6008.
+                                                                  [10] Chun-Kit Yeung and Dit-Yan Yeung. 2018.
+5.   CONCLUSION AND FUTURE WORK                                        Addressing two problems in deep knowledge tracing
+                                                                       via prediction-consistent regularization. arXiv preprint
+In this work, we proposed a self-attention based knowledge
+                                                                       arXiv:1806.02180 (2018).
+tracing model, SAKT. It models a student’s interaction his-
+tory (without using any RNN) and predicts his performance         [11] Jiani Zhang, Xingjian Shi, Irwin King, and Dit-Yan
+on the next exercise by considering the relevant exercises             Yeung. Dynamic key-value memory networks for
+from his past interactions. Extensive experimentation on               knowledge tracing. In Proceedings of the 26th
+a variety of real-world datasets shows that our model can              International Conference on World Wide Web.
+outperform the state-of-the-art methods and is an order of
+magnitude faster than the RNN-based approaches.
+
+6.   REFERENCES
+ [1] Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E
+     Hinton. 2016. Layer normalization. arXiv preprint
+

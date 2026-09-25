@@ -1,0 +1,594 @@
+                                  The Thirty-Seventh AAAI Conference on Artificial Intelligence (AAAI-23)
+
+
+
+
+  Improving Interpretability of Deep Sequential Knowledge Tracing Models with
+                  Question-centric Cognitive Representations
+                  Jiahao Chen1 , Zitao Liu2 * , Shuyan Huang1 , Qiongqiong Liu1 , Weiqi Luo2
+                                                1
+                                          TAL Education Group, Beijing, China
+                          2
+                        Guangdong Institute of Smart Education, Jinan University, Guangzhou, China
+        chenjiahao@tal.com, liuzitao@jnu.edu.cn, huangshuyan@tal.com, liuqiongqiong1@tal.com, lwq@jnu.edu.cn
+
+
+                              Abstract
+  Knowledge tracing (KT) is a crucial technique to predict stu-
+  dents’ future performance by observing their historical learn-
+  ing processes. Due to the powerful representation ability of
+  deep neural networks, remarkable progress has been made
+  by using deep learning techniques to solve the KT prob-
+  lem. The majority of existing approaches rely on the ho-
+  mogeneous question assumption that questions have equiv-
+  alent contributions if they share the same set of knowledge
+  components. Unfortunately, this assumption is inaccurate in
+  real-world educational scenarios. Furthermore, it is very chal-              Figure 1: A graphical illustration of the KT problem.
+  lenging to interpret the prediction results from the existing
+  deep learning based KT models. Therefore, in this paper, we
+  present QIKT, a question-centric interpretable KT model to                   Recently, remarkable progress has been made by apply-
+  address the above challenges. The proposed QIKT approach                  ing deep learning to solve the KT problem (Piech et al.
+  explicitly models students’ knowledge state variations at a
+                                                                            2015; Abdelrahman and Wang 2019; Ghosh, Heffernan, and
+  fine-grained level with question-sensitive cognitive represen-
+  tations that are jointly learned from a question-centric knowl-           Lan 2020; Nakagawa, Iwasawa, and Matsuo 2019; Pandey
+  edge acquisition module and a question-centric problem solv-              and Karypis 2019; Pandey and Srivastava 2020; Shen et al.
+  ing module. Meanwhile, the QIKT utilizes an item response                 2021, 2020; Yang et al. 2020; Zhang et al. 2017, 2021; Wang
+  theory based prediction layer to generate interpretable predic-           et al. 2019; Liu et al. 2023a,b). One of the representative ap-
+  tion results. The proposed QIKT model is evaluated on three               proaches among them is the deep sequential KT modeling,
+  public real-world educational datasets. The results demon-                which utilizes auto-regressive architectures, such as LSTM
+  strate that our approach is superior on the KT prediction task,           and GRU, to represent student’s knowledge states (e.g., the
+  and it outperforms a wide range of deep learning based KT                 mastery level of the concepts) as the hidden states of recur-
+  models in terms of prediction accuracy with better model                  rent units (Piech et al. 2015; Chen et al. 2018; Guo et al.
+  interpretability. To encourage reproducible results, we have
+                                                                            2021; Lee and Yeung 2019; Liu et al. 2019). Due to the abil-
+  provided all the datasets and code at https://pykt.org/.
+                                                                            ity to learn sequential dependencies from student interac-
+                                                                            tion data, deep sequential KT models draw attention from
+                        Introduction                                        researchers from different communities and achieve great
+Knowledge tracing (KT) is the task of using students’ his-                  success in improving prediction accuracy (Minn et al. 2018;
+torical learning interaction data (e.g., responses to a series              Nagatani et al. 2019; Su et al. 2018; Yeung and Yeung 2018).
+of questions) to model their knowledge mastery over time                       In spite of the promising results demonstrated by previous
+so as to make predictions on their future performance (e.g.,                methods, some important limitations still exist when apply-
+predicting correctly on next question) (Corbett and Ander-                  ing deep sequential KT models on real-world educational
+son 1994). Figure 1 gives an illustrative example of the KT                 data. First, most existing approaches rely on the homoge-
+task. Such predictive capabilities can potentially help stu-                neous assumption that questions nested under a particular
+dents learn better and faster when paired with high-quality                 set of knowledge components (KCs) are equivalent (Zhang
+learning materials and instructions and the KT models have                  et al. 2017; Nagatani et al. 2019; Nakagawa, Iwasawa, and
+been widely used to support intelligent tutoring systems and                Matsuo 2019; Lee and Yeung 2019). The homogeneous as-
+MOOC platforms (Käser et al. 2017; Cen, Koedinger, and                     sumption is inaccurate in two perspectives: (1) it assumes
+Junker 2006; Lavoué et al. 2018; Liu et al. 2021a).                        that students have the same knowledge increment after they
+                                                                            give the same responses to homogeneous questions1 during
+    * The corresponding author: Zitao Liu
+                                                                            the knowledge acquisition learning processes; and (2) it as-
+Copyright © 2023, Association for the Advancement of Artificial
+                                                                               1
+Intelligence (www.aaai.org). All rights reserved.                                  In this paper, we refer to questions that have the same set of
+
+
+                                                                    14196
+sumes that students will give the same responses to different                public datasets with a wide range of baselines. The well-
+questions as long as these questions are homogeneous dur-                    designed experiments illustrate the superiority of our ap-
+ing the problem solving process. Such unrealistic assump-                    proach in both prediction performance and model inter-
+tion limits the KT performance of the previous works. While                  pretability. To the best of our knowledge, our QIKT
+in some cases the problem may be alleviated by implicitly                    model is able to achieve the best prediction perfor-
+modeling the question difficulty or question discrimination                  mance in terms of AUC on the publicly available repro-
+(Zhang et al. 2021; Liu et al. 2021b; Ghosh, Heffernan, and                  ducible KT experimental settings.
+Lan 2020), they suffer from the lack of ground truth labels
+or the exclusions of cognitive modeling (e.g., only used in                          Background and Related Work
+pre-trained tasks), and jointly modeling the question-centric
+cognitive effects on knowledge states remains a big con-                   Deep Sequential Modeling for Knowledge Tracing
+cern. Second, although deep learning based knowledge trac-                 Deep sequential KT models utilize an auto-regressive ar-
+ing (DLKT) models have shown advanced progress in terms                    chitecture to capture the intrinsic dependencies among stu-
+of prediction accuracy compared with traditional cognitive                 dents’ chronologically ordered interactions (Chen et al.
+models, it is difficult to extract psychologically meaningful              2018; Guo et al. 2021; Lee and Yeung 2019; Liu et al. 2019;
+explanations from their million-level parameters, that would               Minn et al. 2018; Nagatani et al. 2019; Piech et al. 2015; Su
+relate to cognitive theory. The lack of nontransparent deci-               et al. 2018; Yeung and Yeung 2018). Since the very first and
+sion processes of DLKT models is unsatisfied for tutors and                successful research work of deep knowledge tracing (DKT)
+students who need to see a convincing diagnosis before they                that applies recurrent neural networks to model students’ dy-
+accept results generated from DLKT models.                                 namic learning behaviors by Piech et al. (2015), a large num-
+    In this paper, we address aforementioned challenges                    ber of works have been done to improve DKT’s performance
+by proposing a novel KT model called Question-centric                      (Yeung and Yeung 2018; Chen et al. 2018; Su et al. 2018;
+Interpretable Knowledge Tracing, i.e., QIKT. More specifi-                 Nagatani et al. 2019; Lee and Yeung 2019; Liu et al. 2019;
+cally, QIKT explicitly learns question-centric cognitive rep-              Guo et al. 2021). For example, Yeung and Yeung (2018) pro-
+resentations with a knowledge acquisition module and a                     posed to use two regularization terms to address the recon-
+problem solving module. The knowledge acquisition mod-                     struction and waviness issues in the DKT model. Chen et al.
+ule aims to model the variations in students’ knowledge                    (2018) incorporated prerequisite relations between pedagog-
+states after receiving responses to specific questions. It esti-           ical concepts to enhance DKT model. Su et al. (2018) pre-
+mates students’ question-specific knowledge acquisition by                 sented to aggregate textual representations to monitor stu-
+a joint optimization including representations of students’                dent knowledge states. Nagatani et al. (2019) developed ap-
+current knowledge states, responses, questions and the cor-                proaches to capture students’ forgetting behaviors and Guo
+responding KCs. The problem solving module estimates stu-                  et al. (2021) leveraged adversarial training samples to en-
+dents’ problem solving abilities on each specific question by              hance the deep sequential KT models’ generalization.
+projecting student knowledge states on the jointly learned                    Besides deep sequential KT models, other types of neural
+representations of both questions and KCs. Furthermore, the                network based approaches are applied in the KT domain as
+QIKT incorporates an interpretable prediction layer to im-                 well, such as memory augmented KT models that explic-
+prove interpretability of prediction results. The interpretable            itly model latent relations between KCs with an external
+prediction layer is built upon the Item Response Theory                    memory (Abdelrahman and Wang 2019; Shen et al. 2021;
+(IRT) in psychometrics, and integrates the parameters of                   Zhang et al. 2017), graph based KT models that capture in-
+an IRT model into the question-centric deep sequential KT                  teraction relations with graph neural networks (Nakagawa,
+model. This enables the QIKT model to generate explain-                    Iwasawa, and Matsuo 2019; Tong et al. 2020; Yang et al.
+able personalized parameters for each student at question                  2020), and attention based KT models that use the attention
+level. We evaluate QIKT on three datasets by comparing it                  mechanism and its variants to capture dependencies between
+with 13 previous approaches under a rigorous KT evaluation                 interactions (Ghosh, Heffernan, and Lan 2020; Pandey and
+protocol (Liu et al. 2022). Experimental results demonstrate               Srivastava 2020; Pu et al. 2020; Zhang et al. 2021).
+that QIKT achieves superior prediction performance and the
+psychologically meaningful interpretability simultaneously.                Interpreting Deep Learning Based Knowledge
+    The main contributions are summarized as follows:                      Tracing Models
+• We introduce a knowledge acquisition module and a prob-                  Recently, many interpretable approaches have been incor-
+   lem solving module to learn question-centric represen-                  porated into DLKT models for both student modeling and
+   tations when students absorb knowledge after answering                  prediction tasks. These techniques can be divided into the
+   questions and apply knowledge to solve problems.                        following three categories:
+• We design a simple yet effective interpretable prediction
+   layer based on the IRT theory and manage to seamlessly                  • C1: Post-hoc local explanation. Post-hoc local explana-
+   combine it with existing deep sequential KT models.                       tion techniques are used in the KT task aiming to exam-
+                                                                             ine each individual prediction result and figure out why
+• We conduct comprehensive quantitative and qualitative
+                                                                             the DLKT models make the decisions they make (Lu et al.
+   experiments to validate the performance of QIKT on three
+                                                                             2020, 2022). For example, Lu et al. (2022) applied a layer-
+KCs as “homogeneous questions”.                                              wise relevance propagation method to interpret a deep se-
+
+
+                                                                   14197
+Figure 2: Graphical illustrations of our QIKT model along with some representative DLKT models including DKT (Piech et al.
+2015), qDKT (Sonkar et al. 2020), DKT-IRT (Converse, Pu, and Oliveira 2021), and Deep-IRT (Yeung 2019).
+
+
+  quential KT model by back propagating relevance scores                                    Problem Statement
+  from the model’s output layer to its input layer.                      Our objective is given an arbitrary question q∗ to predict the
+                                                                         probability of whether a student will answer q∗ correctly
+• C2: Global interpretability with explainable struc-                    based on the student’s historical interaction data. Specifi-
+  tures. Embed an interpretable cognitive module into ex-                cally, for each student S, we assume that we have observed a
+  isting DLKT architectures to better understand the knowl-              chronologically ordered collection of t past interactions i.e.,
+  edge state modeling process (Wang et al. 2020a; Zhao                   S = {sj }tj=1 . Each interaction is represented as a 4-tuple s,
+  et al. 2020; Pu et al. 2022). For example, Wang et al.
+                                                                         i.e., s =< q, {k|k ∈ Nq }, r, s >, where q, {k}, r, s repre-
+  (2020a) designed an intermediate interaction layer based
+                                                                         sent the specific question, the associated KC set, the binary
+  on multidimensional IRT and explicitly modeled both stu-
+                                                                         valued student response2 , and student’s response timestamp
+  dent factors and exercise factors. Pu et al. (2022) proposed
+                                                                         respectively. Nq is the set of KCs that are associated with
+  to utilize an automatic temporal cognitive method to better
+                                                                         question q. We would like to estimate the probability r̂∗ of
+  capture the changes in students’ knowledge states.
+                                                                         the student’s future performance on arbitrary question q∗ .
+• C3: Global interpretability with explainable parame-
+  ters. Directly use cognitively interpretable models to esti-                  Interpretable KT Modeling with
+  mate the probability that a student will answer a question               Question-centric Cognitive Representations
+  correctly. Explainable parameters in these models are ob-              In this section, we discuss the five components QIKT
+  tained from outputs of the DLKT models (Converse, Pu,                  model in detail: (1) the interaction encoder that assem-
+  and Oliveira 2021; Yeung 2019). For example, Converse,                 bles and encodes both question-level and KC-level informa-
+  Pu, and Oliveira (2021) linearly transformed the hidden                tion; (2) the question-centric knowledge acquisition (KA)
+  states of the DKT model and then applied a hard thresh-                module that examines students’ knowledge acquisition af-
+  olding operator to cast the parameters into the IRT-like               ter answering specific questions over time; (3) the question-
+  form. Yeung (2019) proposed to explicitly learn levels of              agnostic knowledge state (KS) module that models the
+  student abilities and KC difficulties with a dynamic key-              general knowledge state dynamics; (4) the question-centric
+  value memory network for KT task and feed the learned                  problem solving (PS) module that estimates the capabilities
+  results to an IRT layer for final prediction.                          of students to tackle a specific question with their current
+                                                                         knowledge states; and (5) the interpretable prediction layer
+   Our QIKT belongs to the C3 category since we utilize the              that aims to leverage the psychological theory of IRT to gen-
+IRT function for interpretable prediction. Different from ex-            erate more interpretable results for both tutors and students.
+isting approaches (Yeung 2019; Converse, Pu, and Oliveira
+2021) that only optimize the model performance based on                  Interaction Encoder
+interpretable predicted outcomes, our QIKT approach di-                  In real-world educational scenarios, the question bank is
+rectly incorporates the explainable parameter learning into              usually much bigger than the set of KCs, for example, the
+the final model optimization objective, which improves the               number of questions is more than 1500 times larger than the
+model interpretability and preserves the prediction perfor-              number of KCs in the well cited Algebra2005 dataset3 (see
+mance as well. Compared with the methods developed based                 Table 1). Therefore, most existing research works like DKT
+on memory networks such as Deep-IRT (Yeung 2019), our
+approach is based on the deep sequential architectures,                     2
+                                                                              Response is a binary valued indicator variable where 1 repre-
+which is more applicable and has better prediction accuracy              sents the student correctly answered the question, and 0 otherwise.
+                                                                            3
+(Liu et al. 2022).                                                            Details of Algebra2005 is described in the Datasets section.
+
+
+                                                                 14198
+  KCs       k1 k3    k2 k4        k1       DKT/DKT-                                                                      e1 e2 e3          c1 c2 c3
+                                          IRT/Deep IRT 
+ k1   k3 k2 k4   k1      qDKT 
+    q1    q2   q3     QIKT 
+
+Questions    q1          q2       q3
+                                           Model Input                         Model Input                 Model Input
+Responses
+                                                                                                                         KA Module Input   KS Module Input
+
+
+
+ Figure 3: Illustrations of different interaction encoding approaches. ei s and ci s are defined in eq.(1) and eq.(2) respectively.
+
+
+(Piech et al. 2015), DKT-IRT (Converse, Pu, and Oliveira                           homogeneous questions. Hence, we propose to estimate
+2021), and Deep-IRT (Yeung 2019) alleviate the data spar-                          students’ question-specific knowledge acquisition with the
+sity issue by using KCs to index questions and all questions                       joint representations et s of the questions, concepts and re-
+cover the same KC are treated as a single question. Although                       sponses. Similar to the standard DKT model, we use the
+this conversion greatly relieves the sparsity problem (Ghosh,                      LSTM cell to update the student’s question-level knowledge
+Heffernan, and Lan 2020; Liu et al. 2022), it enforces the                         state at after answering each question at timestamp t:
+DLKT models to follow the homogeneous assumption and
+hence omits different learning effects brought by questions
+of the same concepts. Please note that this conversion lets                                      it = σ (W1 · et + U1 · at−1 + b1 )
+the DLKT models be learned from the extended KC-level se-                                        ft = σ (W2 · et + U2 · at−1 + b2 )
+quences instead of the original question-level sequences, as                                    ot = σ (W3 · et + U3 · at−1 + b3 )
+illustrated in Figure 3. On the other hand, question-centric
+                                                                                                c̃t = σ (W4 · et + U4 · at−1 + b4 )
+models like qDKT (Sonkar et al. 2020) completely ignore
+the relations between questions and KCs and purely uses the                                     ct = ft ct−1 + it c̃t
+question sequence to track students’ knowledge states.                                          at = ot tanh (ct )
+   In this work, we aim to improve the aforementioned
+DLKT models by capturing the intrinsic relations between                           where Wi s, Ui s, bi s are trainable parameters and Wi ∈
+questions and KCs at a more fine-grained level. More specif-                       Rd×4d , Ui ∈ Rd×d , bi ∈ Rd×1 and i = 1, 2, 3, 4. σ, , and
+ically, we have two different raw interaction encodings for                        tanh denote the sigmoid, element-wise multiplication and
+the KA module and the KS module. For the KA module,                                hyperbolic tangent functions.
+similar to a recent work by Long et al. (2021), each ques-                            Different from existing approaches that directly use the
+tion level interaction et is represented as a combination of                       learned knowledge state (at ) to predict the student knowl-
+question, response and the corresponding set of KCs, i.e.,                         edge mastery, we apply a knowledge acquisition network to
+                                                                                   first extract the knowledge states with a fully connected neu-
+                                                                                  ral layer and then project it into the question-centric space
+                              qt ⊕ k̄t ⊕ 0,      rt = 1                            via non-linear transformation. The knowledge       acquisition
+                  et =                                               (1)
+                              0 ⊕ qt ⊕ k̄t ,     rt = 0
+                                                                                                                            
+                                                                                                                                a
+                                                                                   score αt is computed as αt = S-Pool w             ReLU W2a ·
+where qt is the question embedding, qt ∈ Rd×1 and k̄t is                                                         
+                                                                                   ReLU(W1a · at + ba1 ) + ba2 where W1a , W2a , wa , ba1 and
+the average embeddings of all the KCs to the question, i.e.,
+                                                                                   ba2 are trainable parameters and W1a ∈ Rd×d , W2a ∈ Rn×d ,
+                           1
+                                  m
+                                  X                                                wa ∈ Rn×1 , ba1 ∈ Rd×1 , ba2 ∈ Rn×1 , n is the total number
+               k̄t =                kj ∗ I(kj ∈ Nqt )                              of questions, and S-Pool means sum pooling.
+                         |Kqt | j=1
+
+where kj is the KC embedding, kj ∈ Rd×1 . m is the total                           Question-agnostic Knowledge State Module
+number of KCs in the question bank. Kqt is the size of Nqt .                       In real educational contexts, students may frequently guess
+I(·) is the indicator function and ⊕ is the concatenate opera-                     or slip when they interact with questions. This may cause the
+tion. The response in each interaction is encoded as a 2d × 1                      KA module overly sensitive to each interaction and hence
+all-zero vector, 0. We use concatenation directions (left or                       lead prediction confusion during the inference stage. There-
+right) to indicate different responses, i.e., correct or wrong.                    fore, as an important complement, we model the general
+   We conduct a similar encoding mechanism for the KS                              question-agnostic changes of students’ knowledge state in
+module. Since the KS module only focuses on the general                            the KS module. Similar to knowledge state modeling in the
+knowledge state changes regardless of question specific vari-                      KA module, we apply another LSTM cell to update the
+ations, the interaction embedding ct of KS is                                      student’s question-agnostic knowledge state (gt ) after re-
+                                                                                   ceiving each response. The LSTM cell in the KS module
+                                                                                  takes question-agnostic input ct instead of et . The itera-
+                                  k̄t ⊕ 0,     rt = 1                              tive update equations of gt are described in Appendix A.1
+                    ct =                                             (2)
+                                  0 ⊕ k̄t ,    rt = 0                              due to the space limit. Furthermore, we design a knowl-
+                                                                                   edge state extraction network to capsule the general knowl-
+Question-centric Knowledge Acquisition Module                                      edge states of a student by applying non-linear transforma-
+Students absorb knowledge as they interact with questions                          tions to project the mastery level into the space of KCs
+and their knowledge acquisition varies after solving the                           and computing the knowledge mastery score βt i.e., βt =
+
+
+                                                                           14199
+                                                          
+S-Pool wg      ReLU W2g · ReLU(W1g · gt + bg1 ) + bg2
+where W1g , W2g , wg , bg1 and bg2 are trainable parameters
+                                                                                        X                                                
+                                                                           L∗ (z) = −        ri log σ(zi ) + (1 − ri ) log(1 − σ(zi ))
+and W1g ∈ Rd×d , W2g ∈ Rm×d , wg ∈ Rm×1 , bg1 ∈ Rd×1 ,                                   i
+bg2 ∈ Rm×1 .
+                                                                                                 Experiment
+Question-centric Problem Solving Module                                  In this section, we present details of experiment settings and
+Correctly answering a question not only depends on the stu-              the results. We conduct comprehensive analyses and investi-
+dents’ knowledge mastery, but is highly relevant to the ques-            gations to illustrate the effectiveness of the QIKT model.
+tion itself such as its difficulty and discrimination. There-
+fore, we present a question-centric problem solving mod-                 Datasets
+ule to estimate students’ knowledge application abilities to             We use three widely used publicly available datasets to eval-
+specific questions by projecting their knowledge mastery on              uate the performance of QIKT:
+questions. Specifically, we design a problem solving net-
+work to conduct such knowledge projection as follows:                    • ASSISTments20094 (ASSIST2009): is collected from
+                                                                           ASSISTment online tutoring platform in the school year
+                                                                           2012-2013 that students are assigned to answer similar ex-
+pt+1 = gt ⊕ qt+1 ⊕ k̄t+1                                                   ercises from the skill builder problem sets.
+ζt+1 = wp · ReLU W2p · ReLU(W1p · pt+1 + bp1 ) + bp2 +bp                 • Algebra 2005-20065 (Algebra2005): is provided by the
+                                                    
+                                                                           KDD Cup 2010 EDM Challenge where students need to
+where ζt+1 denotes the students’ knowledge application                     complete steps to achieve the mastery of the related KCs.
+score on question qt+1 . pt+1 contains both the student                  • NeurIPS2020 Education Challenge6 (NeurIPS34): is
+knowledge mastery at time t and all the available informa-                 released in Task 3 and Task 4 of NeurIPS2020 Educa-
+tion about question qt+1 and pt+1 ∈ R3d×1 . Wip s, wp ,                    tion Challenge, it includes students’ answers to multiple-
+bpi s and bp are trainable parameters and Wip ∈ R3d×3d ,                   choice math diagnostic questions (Wang et al. 2020b).
+bpi ∈ R3d×1 ,wp ∈ R1×3d , bp is scalar and i = 1, 2.
+                                                                           To conduct reproducible experiments, we rigorously fol-
+Interpretable Prediction Layer                                           low the data pre-processing steps suggested in (Liu et al.
+                                                                         2022). We remove student sequences shorter than 3 at-
+Generally, explaining DLKT models’ parameters and                        tempts. Data statistics are summarized in Table 1.
+decision-making is challenging. Thus, we design an IRT
+based prediction layer to enhance the prediction inter-                  Baselines
+pretability of the proposed QIKT model. Similar to previous
+work by Yeung (2019), we use the IRT function to calculate               We compare our QIKT with the following state-of-the-art
+the probability of a correct answer. Furthermore, we strict              DLKT models to evaluate the effectiveness of our approach:
+the IRT function only takes the linear combined scores of                • DKT: leverages an LSTM layer to encode the student
+question-centric knowledge acquisition score from the KA                   knowledge state to predict the students’ performances
+module, the knowledge mastery score from the KS module                     (Piech et al. 2015).
+and the knowledge application score from the PS module                   • DKT+: an improved version of DKT to solve the recon-
+i.e., r̂t+1 = σ(αt + βt + ζt+1 ). And we explicitly choose                 struction and non-consistent prediction problems (Yeung
+not to include any learnable parameters inside the IRT based               and Yeung 2018).
+prediction function for better interpretability.
+                                                                         • KQN: uses student knowledge state encoder and skill en-
+Optimization of QIKT                                                       coder to predict the student response performance via the
+                                                                           dot product (Lee and Yeung 2019).
+All learnable parameters of our QIKT model are optimized
+by minimizing the binary cross entropy loss between the                  • qDKT: predicts the future performance of student knowl-
+ground-truth responses ri s and the estimated probabilities                edge state at the question level (Sonkar et al. 2020).
+r̂i sP
+     from the IRT layer as the objective function
+                                                 i.e., LIRT =           • DKT-IRT: incorporates IRT to improve the interpretabil-
+− i ri log r̂i + (1 − ri ) log(1 − r̂i ) . Furthermore, to                 ity of DKT (Converse, Pu, and Oliveira 2021).
+directly improve the discriminative ability of the internal              • IEKT: models student knowledge state via the student
+knowledge related scores from the KA, KS and PS modules,                   cognition and knowledge acquisition estimation (Long
+we explicitly cast these scores via sigmoid function and add               et al. 2021).
+the optimization terms about question-centric knowledge ac-              • DKVMN: designs a static key matrix to store the relations
+quisition scores (αt s), knowledge mastery scores (βt s) and               between the different KCs and a dynamic value matrix to
+knowledge application scores (ζt s) into the overall model                 update the students’ knowledge state (Zhang et al. 2017).
+training process. Therefore, the final optimization
+                                                     function
+is L = LIRT + λ L∗ (α) + L∗ (β) + L∗ (ζ) , where λ is tun-                  4
+                                                                              https://sites.google.com/site/assistmentsdata/home/2009-
+ing hyper-parameter. α, β, and ζ denote the collections of               2010-assistment-data/skill-builder-data-2009-2010
+                                                                            5
+the corresponding scores, i.e., α = {αi }, β = {βi }, and                     https://pslcdatashop.web.cmu.edu/KDDCup/
+                                                                            6
+ζ = {ζi } and L∗ (z) is defined as follows:                                   https://eedi.com/projects/neurips-education-challenge
+
+
+                                                                 14200
+                         Dataset          # of Ss     # of Is     # of Qs     # of KCs   Avg. KCs   Avg. Qs
+                         ASSIST2009        3,852     282,605      17,737         123      1.197      144.2
+                         Algebra2005        574      607,013      173,109        112      1.364     1545.6
+                         NeurIPS34         4,918    1,382,661       948           57      1.015      16.6
+
+Table 1: Data statistics of three datasets. # of Ss/Is/Qs denote the number of students, interactions and questions. Avg. KCs and
+Avg. Qs denotes the number of KCs per question and the number of questions per KC.
+
+                                 Usage of     Usage of          Is                                 AUC
+       Method      Model Type
+                                 Questions     KCs        interpretable     ASSIST2009        Algebra2005      NeurIPS34
+        DKT        Sequential      No           Yes            No           0.7541±0.0011*    0.8149±0.0011*   0.7689±0.0002*
+       DKT+        Sequential      No           Yes            No           0.7547±0.0017*    0.8156±0.0011*   0.7696±0.0002*
+        KQN        Sequential      No           Yes            No           0.7477±0.0011*    0.8027±0.0015*   0.7684±0.0003*
+       qDKT        Sequential      Yes          No             No           0.7016±0.0049*    0.7485±0.0017*   0.7995±0.0008*
+      DKT-IRT      Sequential      No           Yes            Yes          0.7591±0.0007*    0.8290±0.0004*   0.7695±0.0004*
+        IEKT       Sequential      Yes          Yes            No           0.7861±0.0027*    0.8416±0.0014•   0.8045±0.0002•
+      DeepIRT       Memory         No           Yes            Yes          0.7465±0.0006*    0.8040±0.0013*   0.7672±0.0006*
+      DKVMN         Memory         No           Yes            No           0.7473±0.0006*    0.8054±0.0011*   0.7673±0.0004*
+       ATKT        Adversarial     No           Yes            No           0.7470±0.0008*    0.7995±0.0023*   0.7665±0.0001*
+        GKT          Graph         No           Yes            No           0.7424±0.0021*    0.8110±0.0009*   0.7689±0.0024*
+       SAKT         Attention      No           Yes            No           0.7246±0.0017*    0.7880±0.0063*   0.7517±0.0005*
+       SAINT        Attention      Yes          Yes            No           0.6958±0.0023*    0.7775±0.0017*   0.7873±0.0007*
+        AKT         Attention      Yes          Yes            No           0.7853±0.0017*    0.8306±0.0019*   0.8033±0.0003*
+        QIKT       Sequential      Yes          Yes            Yes          0.7878±0.0024     0.8408±0.0007    0.8044±0.0005
+
+Table 2: The overall prediction performance of all the baseline models and our QIKT. We highlight the highest results with
+bold. Marker ∗, ◦ and • indicates whether the proposed model is statistically superior/equal/inferior to the compared method
+(using paired t-test at 0.01 significance level).
+
+
+• DeepIRT: a combination of the IRT and DKVMN to en-                      plemented in PyTorch and are trained on a cluster of Linux
+  hance the interpretability of memory augmented models                   servers with the NVIDIA RTX A5000 GPU device. Follow-
+  (Yeung 2019).                                                           ing all existing DLKT research, we use the Area Under the
+• ATKT: performs adversarial perturbations into student in-               Curve (AUC) as the main evaluation metric. We also choose
+  teraction sequence to improve model’s generalization abil-              to use Accuracy as the secondary evaluation metric.
+  ity (Guo et al. 2021).
+                                                                          Results
+• GKT: utilizes the graph structure to predict the students’
+  performance (Nakagawa, Iwasawa, and Matsuo 2019).                       Overall Performance. Due to the space limit, results in
+                                                                          terms of accuracy and the details of statistical tests are
+• SAKT: uses self-attention to capture relations between ex-
+                                                                          provided in Appendix A.2 and Appendix A.3. The over-
+  ercises and student responses (Pandey and Karypis 2019).
+                                                                          all model performance is reported in Table 2. From Table
+• SAINT: uses the Transformer-based layer to capture stu-                 2, we make the following observations: (1) Our proposed
+  dents’ exercise and response sequences (Choi et al. 2020).              model QIKT significantly outperforms 13 baselines on all
+• AKT: leverages an attention mechanism to characterize                   three datasets (except we have two loss with IEKT on AS-
+  the time distance between questions and the past interac-               SIST2009 and NeurIPS34 datasets). More importantly, as
+  tion of students (Ghosh, Heffernan, and Lan 2020).                      a representative of the deep sequential KT models, com-
+                                                                          pared with DKT, our proposed model improves the AUC
+Experimental Setup                                                        by 3.30%, 2.60% and 3.60% on three datasets. That show
+We set the maximum length of model input sequence to 200                  our proposed modules can significantly improve the perfor-
+and perform 5-fold cross-validation for every combination                 mance. (2) When comparing performance on ASSIST2009,
+of models and datasets. We use 80% of student sequences                   Algebra2005 to NeurIPS34, DLKT models behave quite
+for training and validation, and use the rest 20% of student              differently. For example, DKT significantly outperforms
+sequences for model evaluation. We adopt ADAM optimizer                   qDKT on the ASSIST2009 and Algebra2005 datasets by
+to train all the models (Kingma and Ba 2015). The number                  5.30% and 6.60% but is beaten by qDKT by 3.10% on
+of training epochs is set to 200. We choose to use early stop-            the NeurIPS34 dataset. Meanwhile, SAINT performs terri-
+ping strategy that stops optimization when the AUC score is               ble in ASSIST2009 and Algebra2005 datasets, but is pretty
+failed to get the improvement on the validation set in the lat-           good on NeurIPS34 data. We believe this is because the AS-
+est 10 epochs. The hyper-parameter λ, the learning rate and               SIST2009 and Algebra2005 datasets are much sparser than
+the embedding size d are searching from [0,0.5,1,1.5,2], [1e-             NeurIPS34 dataset. As we can see from Table 1, the average
+3, 1e-4, 1e-5], [64, 256] respectively. All the models are im-            number of questions per KC is 16.6 in NeurIPS34 dataset,
+
+
+                                                                  14201
+                                               Knowledge State Estimated by the QIKT model                          Correct    Incorrect
+
+
+               k1
+               k2
+               k3
+               k4
+               k5
+               k6
+                     1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50
+                                                                                Question index
+
+          Figure 4: An example of a student knowledge states of 6 concepts as student’s solve 50 questions of NeurIPS34.
+
+
+which is much smaller compared to the numbers in AS-                                           the k5 hence the knowledge acquisition of k5 is constantly
+SIST2009 and Algebra2005 (144.2 and 1545.6) datasets. (3)                                      increasing. (2) The knowledge states of little-attempted KCs
+Results between DeepIRT and DKVMN are very close on                                            are slightly lower than those of the diligent-attempted KCs.
+three datasets, which empirically shows that the IRT func-                                     For example, the knowledge state of k6 is relatively lower
+tion won’t sacrifice the model prediction ability too much.                                    than others until the student attempts question 39.
+(4) AKT and IEKT are very strong baselines. Both of them                                       Ablation Study. We examine the effect of key components
+use both question and KC related information, which further                                    by constructing four model variants in Table 3. “w/o” means
+empirically verifies the importance of considering question-                                   excludes such module from QIKT. From Table 3, we can ob-
+centric representations when building the DLKT models.                                         serve that (1) comparing QIKT and QIKT w/o IRT, we can
+Qualitative Question-centric Effects. We qualitatively                                         see that our IRT based interpretable prediction layer is able
+show the question-centric effects of our QIKT model. Fig-                                      to make a good enough trade-off between prediction perfor-
+ure 5 shows the progressive knowledge state estimations of                                     mance and results interpretability. The AUC score of QIKT
+one student with and without question-centric modules, i.e.,                                   decreases 0.09% on the ASSIST2009 dataset and increases
+r̂ v.s. σ(β). As we can see, predictions (σ(β)) without the                                    0.81% and 0.07% on Algebra2005 and NeurIPS34 datasets.
+question-centric information from the KS module are rel-                                       (2) compared to other variants (e.g., QIKT w/o KS, QIKT
+atively smooth compared with results from QIKT. We be-                                         w/o PS, and QIKT w/o KS & PS) that have the IRT predic-
+lieve this is because the KS module mainly focuses on the                                      tion layer, QIKT obtains the highest AUC score in all cases
+knowledge states at KC level, which is insensitive with ques-                                  except QIKT w/o KS in the NeurIPS34 dataset. This sug-
+tion variations. When considering both the question-centric                                    gests that prediction performance degrades when ignoring
+knowledge acquisition information and the question-centric                                     any type of question-centric information. Thus, it is impor-
+problem solving information, the model outputs distinct pre-                                   tant to incorporate question information in DLKT models.
+dictive results even for the homogeneous questions. Due to
+the space limit, more illustrative and fine-grained results of                                  Method      ASSIST2009     Algebra2005    NeurIPS34
+r̂, σ(α), σ(β) and σ(ζ) are provided in Appendix A.4.                                           QIKT        0.7878±0.0024 0.8408±0.0007 0.8044±0.0005
+                                                                                                w/o IRT     0.7887±0.0017• 0.8327±0.0005* 0.8037±0.0004*
+                                      r          ( )
+                                                                                                w/o KS      0.7813±0.0019* 0.8365±0.0008* 0.8048±0.0002•
+                                                                                                w/o PS      0.7822±0.0022* 0.8345±0.0005* 0.8037±0.0002*
+1.0
+                                                                                                w/o KS & PS 0.7442±0.0043* 0.7487±0.0008* 0.8032±0.0002*
+
+0.5                                                                                            Table 3: The performance of different variants in QIKT.
+                                                                                               Marker ∗, ◦ and • indicates whether our proposed model is
+                                                                                               statistically superior/equal/inferior to the compared method
+      0        10          20             30           40          50            60
+                    Length of student's interaction sequence                                   (using paired t-test at 0.01 significance level).
+
+Figure 5: The outputs of QIKT (r̂) and module KS (σ(β)) at
+each steps in student’s interaction sequence.                                                                                    Conclusions
+                                                                                               In this paper, we propose an interpretable deep sequential
+Interpretable Student Diagnosis. To verify the inter-                                          KT model learning framework with question-centric cogni-
+pretable and accurate estimations of students’ knowledge                                       tive representations. Comparing with existing DLKT mod-
+states by the QIKT model, we randomly select a student se-                                     els, our QIKT model is able to estimate students’ knowledge
+quence from NeurIPS34 and observe the knowledge state                                          acquisition and measure the student problem solving ability
+variations of the student in 50 questions with 6 KCs. From                                     for each specific question. Furthermore, we design an IRT
+Figure 4, we observe that: (1) since the student always gives                                  based interpretable layer to make the QIKT’s prediction re-
+wrong responses to k3 after answering the question 20 (e.g.                                    sults more explainable. Quantitative and qualitative experi-
+question 21,43), the knowledge state of k3 is constantly de-                                   ments on three real-world datasets show that QIKT outper-
+cline. On the other hand, the student always gives right an-                                   forms other state-of-the-art DLKT models in AUC and gen-
+swers to the questions (question 22-31) which are related to                                   erates explainable predictions for tutors and students.
+
+
+                                                                                      14202
+                  Acknowledgments                                       Liu, Q.; Huang, Z.; Yin, Y.; Chen, E.; Xiong, H.; Su, Y.;
+This work was supported in part by National Key R&D Pro-                and Hu, G. 2019. EKT: Exercise-aware knowledge tracing
+gram of China, under Grant No. 2020AAA0104500; in part                  for student performance prediction. IEEE Transactions on
+by Beijing Nova Program (Z201100006820068) from Bei-                    Knowledge and Data Engineering, 33(1): 100–115.
+jing Municipal Science & Technology Commission; in part                 Liu, T.; Fang, Q.; Ding, W.; Li, H.; Wu, Z.; and Liu, Z.
+by NFSC under Grant No. 61877029 and in part by Key Lab-                2021a. Mathematical Word Problem Generation from Com-
+oratory of Smart Education of Guangdong Higher Education                monsense Knowledge Graph and Equations. In Proceedings
+Institutes, Jinan University (2022LSYS003).                             of the 2021 Conference on Empirical Methods in Natural
+                                                                        Language Processing, 4225–4240.
+                       References                                       Liu, Y.; Yang, Y.; Chen, X.; Shen, J.; Zhang, H.; and Yu, Y.
+Abdelrahman, G.; and Wang, Q. 2019. Knowledge tracing                   2021b. Improving knowledge tracing via pre-training ques-
+with sequential key-value memory networks. In Proceed-                  tion embeddings. In Proceedings of the Twenty-Ninth Inter-
+ings of the 42nd International ACM SIGIR Conference on                  national Conference on International Joint Conferences on
+Research and Development in Information Retrieval, 175–                 Artificial Intelligence, 1556–1562.
+184.                                                                    Liu, Z.; Liu, Q.; Chen, J.; Huang, S.; Gao, B.; Luo, W.; and
+Cen, H.; Koedinger, K.; and Junker, B. 2006. Learning fac-              Weng, J. 2023a. Enhancing Deep Knowledge Tracing with
+tors analysis–a general method for cognitive model evalua-              Auxiliary Tasks. In Proceedings of the 2023 World Wide
+tion and improvement. In International Conference on In-                Web Conference.
+telligent Tutoring Systems, 164–175. Springer.                          Liu, Z.; Liu, Q.; Chen, J.; Huang, S.; and Luo, W.
+Chen, P.; Lu, Y.; Zheng, V. W.; and Pian, Y. 2018.                      2023b. simpleKT: A Simple But Tough-to-Beat Baseline for
+Prerequisite-driven deep knowledge tracing. In 2018 IEEE                Knowledge Tracing. In International Conference on Learn-
+International Conference on Data Mining, 39–48. IEEE.                   ing Representations.
+Choi, Y.; Lee, Y.; Cho, J.; Baek, J.; Kim, B.; Cha, Y.; Shin,           Liu, Z.; Liu, Q.; Chen, J.; Huang, S.; Tang, J.; and Luo, W.
+D.; Bae, C.; and Heo, J. 2020. Towards an appropriate                   2022. PY KT: A Python Library to Benchmark Deep Learn-
+query, key, and value computation for knowledge tracing.                ing based Knowledge Tracing Models. In Thirty-sixth Con-
+In Proceedings of the Seventh ACM Conference on Learn-                  ference on Neural Information Processing Systems.
+ing@Scale, 341–344.                                                     Long, T.; Liu, Y.; Shen, J.; Zhang, W.; and Yu, Y. 2021. Trac-
+Converse, G.; Pu, S.; and Oliveira, S. 2021. Incorporat-                ing Knowledge State with Individual Cognition and Acqui-
+ing item response theory into knowledge tracing. In Inter-              sition Estimation. In Proceedings of the 44th International
+national Conference on Artificial Intelligence in Education,            ACM SIGIR Conference on Research and Development in
+114–118. Springer.                                                      Information Retrieval, 173–182.
+Corbett, A. T.; and Anderson, J. R. 1994. Knowledge                     Lu, Y.; Wang, D.; Chen, P.; Meng, Q.; and Yu, S. 2022. In-
+tracing: Modeling the acquisition of procedural knowledge.              terpreting Deep Learning Models for Knowledge Tracing.
+User Modeling and User-adapted Interaction, 4(4): 253–                  International Journal of Artificial Intelligence in Education,
+278.                                                                    1–24.
+Ghosh, A.; Heffernan, N.; and Lan, A. S. 2020. Context-                 Lu, Y.; Wang, D.; Meng, Q.; and Chen, P. 2020. Towards in-
+Aware Attentive Knowledge Tracing. In ACM SIGKDD                        terpretable deep learning models for knowledge tracing. In
+Conference on Knowledge Discovery and Data Mining.                      International Conference on Artificial Intelligence in Edu-
+Guo, X.; Huang, Z.; Gao, J.; Shang, M.; Shu, M.; and Sun, J.            cation, 185–190. Springer.
+2021. Enhancing Knowledge Tracing via Adversarial Train-                Minn, S.; Yu, Y.; Desmarais, M. C.; Zhu, F.; and Vie, J.-J.
+ing. In Proceedings of the 29th ACM International Confer-               2018. Deep knowledge tracing and dynamic student classi-
+ence on Multimedia, 367–375.                                            fication for knowledge tracing. In 2018 IEEE International
+Käser, T.; Klingler, S.; Schwing, A. G.; and Gross, M. 2017.           Conference on Data Mining, 1182–1187. IEEE.
+Dynamic Bayesian networks for student modeling. IEEE                    Nagatani, K.; Zhang, Q.; Sato, M.; Chen, Y.-Y.; Chen, F.;
+Transactions on Learning Technologies, 10(4): 450–462.                  and Ohkuma, T. 2019. Augmenting knowledge tracing by
+Kingma, D. P.; and Ba, J. 2015. Adam: A Method for                      considering forgetting behavior. In The World Wide Web
+Stochastic Optimization. In International Conference on                 Conference, 3101–3107.
+Learning Representations.                                               Nakagawa, H.; Iwasawa, Y.; and Matsuo, Y. 2019. Graph-
+Lavoué, E.; Monterrat, B.; Desmarais, M.; and George, S.               based knowledge tracing: modeling student proficiency us-
+2018. Adaptive gamification for learning environments.                  ing graph neural network. In 2019 IEEE/WIC/ACM Interna-
+IEEE Transactions on Learning Technologies, 12(1): 16–28.               tional Conference on Web Intelligence, 156–163. IEEE.
+Lee, J.; and Yeung, D.-Y. 2019. Knowledge query net-                    Pandey, S.; and Karypis, G. 2019. A self-attentive model for
+work for knowledge tracing: How knowledge interacts with                knowledge tracing. In 12th International Conference on Ed-
+skills. In Proceedings of the 9th International Conference              ucational Data Mining, 384–389. International Educational
+on Learning Analytics & Knowledge, 491–500.                             Data Mining Society.
+
+
+                                                                14203
+Pandey, S.; and Srivastava, J. 2020. RKT: relation-aware                 Yeung, C.-K. 2019. Deep-IRT: Make deep learning based
+self-attention for knowledge tracing. In Proceedings of                  knowledge tracing explainable using item response theory.
+the 29th ACM International Conference on Information &                   arXiv preprint arXiv:1904.11738.
+Knowledge Management, 1205–1214.                                         Yeung, C.-K.; and Yeung, D.-Y. 2018. Addressing two prob-
+Piech, C.; Bassen, J.; Huang, J.; Ganguli, S.; Sahami, M.;               lems in deep knowledge tracing via prediction-consistent
+Guibas, L. J.; and Sohl-Dickstein, J. 2015. Deep knowledge               regularization. In Proceedings of the Fifth Annual ACM
+tracing. Advances in neural information processing systems,              Conference on Learning at Scale, 1–10.
+28.                                                                      Zhang, J.; Shi, X.; King, I.; and Yeung, D. Y. 2017. Dynamic
+Pu, S.; Yudelson, M.; Ou, L.; and Huang, Y. 2020. Deep                   Key-Value Memory Networks for Knowledge Tracing. In
+knowledge tracing with transformers. In International Con-               Proceedings of the 26th International Conference on World
+ference on Artificial Intelligence in Education, 252–256.                Wide Web, 765.
+Springer.                                                                Zhang, M.; Zhu, X.; Zhang, C.; Ji, Y.; Pan, F.; and Yin,
+Pu, Y.; Wu, W.; Peng, T.; Liu, F.; Liang, Y.; Yu, X.; Chen,              C. 2021. Multi-Factors Aware Dual-Attentional Knowledge
+R.; and Feng, P. 2022. EAKT: Embedding Cognitive Frame-                  Tracing. In Proceedings of the 30th ACM International Con-
+work with Attention for Interpretable Knowledge Tracing.                 ference on Information & Knowledge Management, 2588–
+Scientific Reports.                                                      2597.
+Shen, S.; Liu, Q.; Chen, E.; Huang, Z.; Huang, W.; Yin, Y.;              Zhao, J.; Bhatt, S.; Thille, C.; Zimmaro, D.; and Gattani,
+Su, Y.; and Wang, S. 2021. Learning Process-consistent                   N. 2020. Interpretable personalized knowledge tracing and
+Knowledge Tracing. In Proceedings of the 27th ACM                        next learning activity recommendation. In Proceedings of
+SIGKDD Conference on Knowledge Discovery & Data Min-                     the Seventh ACM Conference on Learning@Scale, 325–328.
+ing, 1452–1460.
+Shen, S.; Liu, Q.; Chen, E.; Wu, H.; Huang, Z.; Zhao, W.;
+Su, Y.; Ma, H.; and Wang, S. 2020. Convolutional knowl-
+edge tracing: Modeling individualization in student learning
+process. In Proceedings of the 43rd International ACM SI-
+GIR Conference on Research and Development in Informa-
+tion Retrieval, 1857–1860.
+Sonkar, S.; Waters, A. E.; Lan, A. S.; Grimaldi, P. J.; and
+Baraniuk, R. G. 2020. qDKT: Question-centric deep knowl-
+edge tracing. In Proceedings of The 13th International Con-
+ference on Educational Data Mining, 677–681.
+Su, Y.; Liu, Q.; Liu, Q.; Huang, Z.; Yin, Y.; Chen, E.; Ding,
+C.; Wei, S.; and Hu, G. 2018. Exercise-enhanced sequential
+modeling for student performance prediction. In Proceed-
+ings of the AAAI Conference on Artificial Intelligence.
+Tong, S.; Liu, Q.; Huang, W.; Huang, Z.; Chen, E.; Liu, C.;
+Ma, H.; and Wang, S. 2020. Structure-based Knowledge
+Tracing: An Influence Propagation View. In 2020 IEEE In-
+ternational Conference on Data Mining, 541–550. IEEE.
+Wang, F.; Liu, Q.; Chen, E.; Huang, Z.; Chen, Y.; Yin, Y.;
+Huang, Z.; and Wang, S. 2020a. Neural cognitive diagno-
+sis for intelligent education systems. In Proceedings of the
+AAAI Conference on Artificial Intelligence, 6153–6161.
+Wang, Z.; Feng, X.; Tang, J.; Huang, G. Y.; and Liu, Z. 2019.
+Deep knowledge tracing with side information. In Inter-
+national Conference on Artificial Intelligence in Education,
+303–308. Springer.
+Wang, Z.; Lamb, A.; Saveliev, E.; Cameron, P.; Zaykov, Y.;
+Hernández-Lobato, J. M.; Turner, R. E.; Baraniuk, R. G.;
+Barton, C.; Jones, S. P.; et al. 2020b. Instructions and
+Guide for Diagnostic Questions: The NeurIPS 2020 Educa-
+tion Challenge. ArXiv preprint, abs/2007.12061.
+Yang, Y.; Shen, J.; Qu, Y.; Liu, Y.; Wang, K.; Zhu, Y.; Zhang,
+W.; and Yu, Y. 2020. GIKT: a graph-based interaction model
+for knowledge tracing. In Joint European Conference on
+Machine Learning and Knowledge Discovery in Databases,
+299–315. Springer.
+
+
+                                                                 14204
+
