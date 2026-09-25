@@ -1,11 +1,27 @@
 #!/usr/bin/env bash
-#create conda env pykt space if not exists, and evaluate a sample model. follow /Users/l/klee_code/git_repos/pykt_space/quick_start.md.txt
 set -euo pipefail
 cd "$(dirname "$0")"
 
-CONDA_HOME=${CONDA_HOME:-/Users/l/miniconda3}
-ENV_NAME=pykt
+# make this also work under remote server (root path is still ~/klee_code)
+# conda 的安装位置各机器不同，按 环境变量 -> 已激活的 conda -> PATH 上的 conda -> 常见安装位置 依次找
+find_conda_home() {
+    [ -x "${CONDA_HOME:-}/bin/conda" ] && { echo "$CONDA_HOME"; return; }
+    [ -n "${CONDA_EXE:-}" ] && [ -x "$CONDA_EXE" ] && { echo "${CONDA_EXE%/bin/conda}"; return; }
+    local base
+    base="$(conda info --base 2>/dev/null || true)"
+    [ -x "$base/bin/conda" ] && { echo "$base"; return; }
+    for d in "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/miniforge3" /opt/conda; do
+        [ -x "$d/bin/conda" ] && { echo "$d"; return; }
+    done
+}
+CONDA_HOME="$(find_conda_home)"
+if [ -z "$CONDA_HOME" ]; then
+    echo "[错误] 找不到 conda。装一个，或者手动指定：CONDA_HOME=/path/to/miniconda3 $0" >&2
+    exit 1
+fi
+ENV_NAME="${ENV_NAME:-pykt}"
 PY="$CONDA_HOME/envs/$ENV_NAME/bin/python"
+echo "[env] conda=$CONDA_HOME, env=$ENV_NAME"
 
 # 官方文档是 conda create --name=pykt python=3.7.5，但本机是 osx-arm64，conda 上 python 最低只有 3.8，故用 3.9
 if [ ! -x "$PY" ]; then
@@ -19,6 +35,11 @@ fi
 # pykt 的预处理依赖 pandas 1.x 的 groupby 行为（pandas 2 下 uid 会被写成 "(50121,)" 导致解析失败）
 "$PY" -c 'import pandas, sys; sys.exit(0 if pandas.__version__.startswith("1.") else 1)' 2>/dev/null || \
     "$PY" -m pip install "numpy==1.26.4" "pandas==1.5.3"
+
+# pykt_gh（GitHub 版 pykt 整包）比 PyPI 版多用了这几个包：dimkt 的数据加载用 tqdm，
+# extrakt/fluckt 等用 einops，cskt 等在模块顶层 import matplotlib
+"$PY" -c 'import tqdm, einops, matplotlib' 2>/dev/null || \
+    "$PY" -m pip install tqdm einops matplotlib
 
 # i downloaded data ASSISTments2015 into /Users/l/klee_code/git_repos/pykt_space/quick_start.md.txt
 # 实际的原始数据文件是本目录下的 2015_100_skill_builders_main_problems.csv
