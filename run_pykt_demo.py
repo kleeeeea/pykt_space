@@ -307,6 +307,8 @@ def main():
     parser.add_argument("--ukt_cl_weight", type=float, default=0.02)
     parser.add_argument("--retrain", action="store_true",
                         help="忽略已有 checkpoint 缓存，强制重新训练")
+    parser.add_argument("--fail_fast", action="store_true",
+                        help="默认某个模型报错只跳过它、继续跑后面的；加这个则直接中断（调试时用）")
     parser.add_argument("--workdir", type=str, default=os.path.join(HERE, "work"))
     parser.add_argument("--max_users", type=int, default=3000,
                         help="只取前 N 个用户跑 demo；0 表示用全量数据")
@@ -389,10 +391,19 @@ def main():
         probe_models(args, model_names, base_model_config, data_config, dconfig)
         return
 
-    results = []
+    results, failed = [], []
     for model_name in model_names:
         set_seed(args.seed)  # 每个模型用同样的随机种子初始化
-        results.append(train_and_eval(args, model_name, base_model_config, data_config, dconfig))
+        try:
+            results.append(train_and_eval(args, model_name, base_model_config, data_config, dconfig))
+        except Exception as e:
+            # 一个模型挂了不该让整轮（35 个模型、几小时）白跑；打完栈继续下一个，最后统一汇报
+            if args.fail_fast:
+                raise
+            import traceback
+            traceback.print_exc()
+            failed.append((model_name, f"{type(e).__name__}: {e}"))
+            print(f"[错误] {model_name} 跑挂了，跳过（要让它直接中断加 --fail_fast）")
 
     # ---------- 4. 汇总 ----------
     print("=" * 60)
@@ -403,6 +414,10 @@ def main():
         print(f"{res['model_name']:<15}{res['best_epoch']:>8}{res['validauc']:>11.4f}"
               f"{res['testauc']:>10.4f}{res['testacc']:>10.4f}"
               f"{res['wauc']:>9.4f}{res['wacc']:>9.4f}")
+    if failed:
+        print(f"-- 失败 {len(failed)} 个（上面各自有完整栈）:")
+        for name, err in failed:
+            print(f"   {name:<15}{err}")
     print("=" * 60)
 
 
