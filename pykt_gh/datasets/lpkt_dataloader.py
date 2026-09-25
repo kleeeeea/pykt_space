@@ -7,7 +7,11 @@ from re import L
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from torch import FloatTensor, LongTensor
+# [本地改动] 同 que_data_loader：原文写死 CPU 张量，GPU 上会和模型不在同一设备
+if torch.cuda.is_available():
+    from torch.cuda import FloatTensor, LongTensor
+else:
+    from torch import FloatTensor, LongTensor
 import numpy as np
 
 ModelConf = {

@@ -5,8 +5,13 @@ import os, sys
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-# from torch.cuda import FloatTensor, LongTensor
-from torch import FloatTensor, LongTensor
+# [本地改动] 原文写死 `from torch import FloatTensor, LongTensor`，张量一律建在 CPU；
+# GPU 上模型在 cuda、数据在 cpu，iekt/qikt/denoisekt 会报 "found at least two devices"。
+# 这里改成和同目录 data_loader.py 一致：有 CUDA 就用 torch.cuda 的类型
+if torch.cuda.is_available():
+    from torch.cuda import FloatTensor, LongTensor
+else:
+    from torch import FloatTensor, LongTensor
 import numpy as np
 
 class KTQueDataset(Dataset):

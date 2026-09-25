@@ -1,7 +1,12 @@
 import pandas as pd
 from torch.utils.data import Dataset
-# from torch.cuda import FloatTensor, LongTensor
-from torch import FloatTensor, LongTensor
+# [本地改动] 同 que_data_loader：原文写死 CPU 张量，GPU 上会和模型不在同一设备
+# （dimkt 这次没崩是因为它 forward 里自己 .to() 过，统一改掉免得以后再踩）
+import torch
+if torch.cuda.is_available():
+    from torch.cuda import FloatTensor, LongTensor
+else:
+    from torch import FloatTensor, LongTensor
 import os
 import numpy as np
 from tqdm import tqdm
