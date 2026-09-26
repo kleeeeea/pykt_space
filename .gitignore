@@ -1,3 +1,9 @@
 work/
 __pycache__/
 *.pyc
+
+# 原始数据集（几 GB）不进仓库，各机器用 data/run.sh 自己下
+# 注意要写 data/* 而不是 data/：对整个目录的忽略无法用 ! 再放行里面的文件
+data/*
+!data/run.sh
+!data/alldata.md
