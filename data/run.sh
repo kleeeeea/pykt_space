@@ -50,12 +50,32 @@ ensure_edudata() {
     }
 }
 
+# 按文件内容判断格式解压，不看扩展名：XES3G5M 那份网盘文件叫 .zip，实际是 gzip 压缩的 tar
+extract() {
+    local archive="$1" dest="$2" kind
+    kind="$(file -b "$archive")"
+    mkdir -p "$dest"
+    case "$kind" in
+        *Zip*)      unzip -q -o "$archive" -d "$dest" ;;
+        *gzip*)     tar -xzf "$archive" -C "$dest" ;;
+        *bzip2*)    tar -xjf "$archive" -C "$dest" ;;
+        *XZ*|*xz*)  tar -xJf "$archive" -C "$dest" ;;
+        *"POSIX tar"*) tar -xf "$archive" -C "$dest" ;;
+        *)
+            echo "[错误] 不认识的压缩格式：$kind（文件留在 $archive）" >&2
+            return 1 ;;
+    esac
+    rm -f "$archive"
+}
+
 fetch() {
     local name="$1" src="$2" dest="$3"
-    if [ -e "$dest" ] && [ -z "${FORCE:-}" ]; then
+    # 要求目录非空：下载失败时 mkdir 可能已经建了空壳，只看"存在"会误判成已下载
+    if [ -n "$(ls -A "$dest" 2>/dev/null)" ] && [ -z "${FORCE:-}" ]; then
         echo "[skip] $name -> $dest 已存在（要重下加 FORCE=1）"
         return
     fi
+    [ -d "$dest" ] && rmdir "$dest" 2>/dev/null  # 上次失败留下的空目录
     case "$src" in
         edudata:*)
             ensure_edudata
@@ -65,18 +85,18 @@ from EduData import get_data
 get_data('${src#edudata:}', '.')"
             ;;
         url:*)
-            local url="${src#url:}" zip="${dest}.zip"
+            local url="${src#url:}" ar="${dest}.download"
             echo "[curl] $name <- $url"
-            curl -fL --retry 3 -C - -o "$zip" "$url"
-            mkdir -p "$dest" && unzip -q -o "$zip" -d "$dest" && rm -f "$zip"
+            curl -fL --retry 3 -C - -o "$ar" "$url"
+            extract "$ar" "$dest"
             ;;
         gdrive:*)
             "$PY" -c 'import gdown' 2>/dev/null || "$PY" -m pip install -q gdown
             echo "[gdown] $name <- Google Drive ${src#gdrive:}"
             echo "        注意：其 README 声明「下载即表示接受该数据集的 license」"
-            local zip="${dest}.zip"
-            "$PY" -m gdown "${src#gdrive:}" -O "$zip"
-            mkdir -p "$dest" && unzip -q -o "$zip" -d "$dest" && rm -f "$zip"
+            local ar="${dest}.download"
+            "$PY" -m gdown "${src#gdrive:}" -O "$ar"
+            extract "$ar" "$dest"
             ;;
         *)
             echo "[错误] 不认识的来源：$src" >&2; return 1 ;;

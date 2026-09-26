@@ -22,6 +22,8 @@ fi
 ENV_NAME="${ENV_NAME:-pykt}"
 PY="$CONDA_HOME/envs/$ENV_NAME/bin/python"
 echo "[env] conda=$CONDA_HOME, env=$ENV_NAME"
+# 输出重定向/管道（tee 到日志、tmux）时 python 默认块缓冲，进度会卡住不刷出来
+export PYTHONUNBUFFERED=1
 
 # 官方文档是 conda create --name=pykt python=3.7.5，但本机是 osx-arm64，conda 上 python 最低只有 3.8，故用 3.9
 # 用 conda-forge 而不是默认频道：defaults 需要先 conda tos accept 接受 Anaconda 服务条款，

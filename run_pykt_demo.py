@@ -19,22 +19,68 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW_CSV = os.path.join(HERE, "2015_100_skill_builders_main_problems.csv")
 
+# 各数据集的原始文件在哪、按哪一列采样用户、什么分隔符。
+# 名字必须是 pykt 认的（见 pykt/preprocess/data_proprocess.py 里的分支），预处理按名字选对应的解析器。
+# 除 assist2015 外，原始数据都用 data/run.sh 下载，路径相对本目录。
+RAW_DATASETS = {
+    "assist2015" : {"raw"     : "2015_100_skill_builders_main_problems.csv",
+                    "user_col": "user_id"},
+    "assist2009" : {"raw"     : "data/2009_skill_builder_data_corrected/skill_builder_data_corrected.csv",
+                    "user_col": "user_id",
+                    # 这份 csv 有非 utf-8 字节，pykt 的解析器自己用 dtype=str 读，这里采样也要对齐
+                    "encoding": "ISO-8859-1"},
+    "assist2017" : {"raw"     : "data/anonymized_full_release_competition_dataset/"
+                                "anonymized_full_release_competition_dataset.csv",
+                    "user_col": "studentId"},
+    "algebra2005": {"raw"     : "data/algebra_2005_2006/algebra_2005_2006/algebra_2005_2006_train.txt",
+                    "user_col": "Anon Student Id",
+                    "sep"     : "\t"},  # KDD Cup 的数据是制表符分隔，pykt 用 read_table 读
+    # nips_task34 的解析器还要读同目录下的 metadata/，所以 extra_dirs 里的目录要一并拷过去
+    "nips_task34": {"raw"       : "data/NIPS2020/public_data/train_data/train_task_3_4.csv",
+                    "user_col"  : "UserId",
+                    "extra_dirs": ["data/NIPS2020/public_data/metadata"]},
+    # xes3g5m 不在这张表里：它给的已经是切好的序列，不需要原始日志预处理，见 xes3g5m_support.py
+}
+# XES3G5M 用 KC 级那套（和其它数据集的 KC 级评估口径一致）；question_level/ 暂未接
+XES3G5M_KC_LEVEL = "data/XES3G5M/XES3G5M/kc_level"
 
-def prepare_raw(dpath, max_users):
-    """把原始 csv 放到 data/{dataset_name}/ 下，max_users>0 时只取前 N 个用户加速 demo。"""
+
+def prepare_raw(dataset_name, dpath, max_users):
+    """把原始数据放到 work/data/{dataset_name}/ 下，max_users>0 时只取前 N 个用户加速 demo。"""
+    if dataset_name not in RAW_DATASETS:
+        raise KeyError(f"没有配 {dataset_name} 的原始数据，先在 RAW_DATASETS 里加一条；"
+                       f"已配好的：{sorted(RAW_DATASETS)}")
+    spec = RAW_DATASETS[dataset_name]
+    src = os.path.join(HERE, spec["raw"])
+    if not os.path.exists(src):
+        raise FileNotFoundError(f"原始数据不在 {src}，先跑 data/run.sh 下载")
+    sep, enc = spec.get("sep", ","), spec.get("encoding")
     os.makedirs(dpath, exist_ok=True)
-    dst = os.path.join(dpath, os.path.basename(RAW_CSV))
-    if max_users > 0:
+    dst = os.path.join(dpath, os.path.basename(src))
+
+    # 注意：写出去一律用 utf-8。pykt 的各个解析器都是按 utf-8 读的（assist2009 那份原始 csv
+    # 是 ISO-8859-1，照原样拷过去会 UnicodeDecodeError），所以这里顺便做一次编码转换
+    if max_users > 0 or enc:
         import pandas as pd
 
-        df = pd.read_csv(RAW_CSV)
-        keep = set(df["user_id"].drop_duplicates().head(max_users))
-        sub = df[df["user_id"].isin(keep)]
-        sub.to_csv(dst, index=False)
-        print(f"[data] 采样 {len(keep)} 个用户 / {len(sub)} 条交互 -> {dst}")
+        df = pd.read_csv(src, sep=sep, encoding=enc, low_memory=False)
+        if max_users > 0:
+            keep = set(df[spec["user_col"]].drop_duplicates().head(max_users))
+            df = df[df[spec["user_col"]].isin(keep)]
+            print(f"[data] 采样 {len(keep)} 个用户 / {len(df)} 条交互 -> {dst}")
+        else:
+            print(f"[data] 使用全量数据（转 utf-8）-> {dst}")
+        df.to_csv(dst, sep=sep, index=False)
     else:
-        shutil.copyfile(RAW_CSV, dst)
+        shutil.copyfile(src, dst)
         print(f"[data] 使用全量数据 -> {dst}")
+
+    # 有的解析器（nips_task34）还要读原始数据旁边的 metadata 目录
+    for rel in spec.get("extra_dirs", []):
+        extra_dst = os.path.join(dpath, os.path.basename(rel))
+        if not os.path.exists(extra_dst):
+            shutil.copytree(os.path.join(HERE, rel), extra_dst)
+            print(f"[data] 附带目录 -> {extra_dst}")
     return dst
 
 
@@ -312,6 +358,10 @@ def main():
     parser.add_argument("--workdir", type=str, default=os.path.join(HERE, "work"))
     parser.add_argument("--max_users", type=int, default=3000,
                         help="只取前 N 个用户跑 demo；0 表示用全量数据")
+    # 目前只有 xes3g5m 用：它的 test_window 是按步长 1 滑窗，学生序列又长（平均 370+ 步），
+    # 3000 个学生能切出 3GB+ 的文件，所以测试集的学生数单独限一下
+    parser.add_argument("--max_test_users", type=int, default=0,
+                        help="测试集单独的学生数上限；0 表示和 --max_users 一致")
     parser.add_argument("--min_seq_len", type=int, default=3)
     parser.add_argument("--maxlen", type=int, default=200)
     parser.add_argument("--kfold", type=int, default=5)
@@ -366,9 +416,16 @@ def main():
     # ---------- 1. 预处理 ----------
     done_flag = os.path.join(dpath, "test_sequences.csv")
     if args.force_preprocess or not os.path.exists(done_flag):
-        raw_csv = prepare_raw(dpath, args.max_users)
         t0 = time.time()
-        preprocess(args, dpath, raw_csv, config_file)
+        if args.dataset_name == "xes3g5m":
+            # XES3G5M 给的已经是切好的序列，不走 pykt 的预处理，只采样 + 切测试集 + 写 config
+            from xes3g5m_support import prepare_xes3g5m
+            prepare_xes3g5m(os.path.join(HERE, XES3G5M_KC_LEVEL), dpath, config_file,
+                            args.max_users, maxlen=args.maxlen, min_seq_len=args.min_seq_len,
+                            max_test_users=args.max_test_users)
+        else:
+            raw_csv = prepare_raw(args.dataset_name, dpath, args.max_users)
+            preprocess(args, dpath, raw_csv, config_file)
         print(f"[preprocess] 耗时 {time.time() - t0:.1f}s")
     else:
         print(f"[preprocess] 复用已有切分结果：{dpath}（要重跑加 --force_preprocess）")
@@ -1038,6 +1095,11 @@ def train_and_eval(args, model_name, base_model_config, data_config, dconfig):
             best_model = kt_load_model(args, model_name, model_config, dconfig, ckpt_path)
         except RuntimeError as e:  # 旧 checkpoint 和当前 model_config 形状对不上
             print(f"[cache] checkpoint 加载失败，重新训练：{str(e).splitlines()[0]}")
+            if train_loader is None:
+                # 上面因为"命中缓存"跳过了建 loader，现在要回退去训练，得补上
+                train_loader, valid_loader = kt_train_loaders(args, model_name, data_config, dconfig)
+                train_loader = limit_loader(train_loader, max_batches)
+                valid_loader = limit_loader(valid_loader, max_batches)
 
     if best_model is not None and meta is not None:
         validauc, validacc, best_epoch = meta["validauc"], meta["validacc"], meta["best_epoch"]
