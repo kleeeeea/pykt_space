@@ -7,3 +7,7 @@ __pycache__/
 data/*
 !data/run.sh
 !data/alldata.md
+# EduData 跟着仓库走（12M）：data/run.sh 用 pip install -e 装它，远端没有就跑不了
+!data/EduData-master/
+!data/EduData-master/**
+data/EduData-master/*.egg-info/
